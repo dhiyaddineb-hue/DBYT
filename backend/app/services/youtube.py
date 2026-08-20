@@ -159,7 +159,7 @@ def _try_extract(
         # Embedded clients are intentionally tried without browser cookies.
         # This keeps an expired secret from turning a public video into a
         # sign-in failure; browser clients still receive the cookie when useful.
-        if has_cookies and client not in {"tv_embedded", "web_embedded"}:
+        if has_cookies and client not in {"android_vr", "tv_embedded", "web_embedded"}:
             options["cookiefile"] = _COOKIES_PATH
         if download:
             options["format"] = (
