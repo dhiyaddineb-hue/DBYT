@@ -44,7 +44,7 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 code("""#@title 1) تثبيت الأدوات الأساسية
 !sudo apt-get update -qq
 !sudo apt-get install -y -qq ffmpeg
-!pip -q install -U "yt-dlp[default]" requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
+!pip -q install -U "yt-dlp[default]" yt-dlp-ejs requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
 
 from pathlib import Path
 import json, os, re, shutil, subprocess, sys, uuid
@@ -55,6 +55,16 @@ WORK_DIR = Path('/content/dbty')
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault('HF_HOME', str(WORK_DIR / 'models' / 'huggingface'))
 os.environ.setdefault('TTS_HOME', str(WORK_DIR / 'models' / 'tts'))
+
+# yt-dlp now needs a real JavaScript runtime for YouTube. Install the
+# recommended Deno runtime once per Colab session and expose its exact path.
+deno_path = Path('/root/.deno/bin/deno')
+if not deno_path.exists():
+    subprocess.run(['bash', '-lc', 'curl -fsSL https://deno.land/install.sh | sh'], check=True)
+if not deno_path.exists():
+    raise RuntimeError('Deno installation failed; yt-dlp cannot solve YouTube JavaScript challenges.')
+os.environ['PATH'] = f'{deno_path.parent}:{os.environ.get("PATH", "")}'
+subprocess.run([str(deno_path), '--version'], check=True)
 print('✅ Base Colab environment ready:', WORK_DIR)
 """)
 
@@ -101,7 +111,7 @@ source_path = WORK_DIR / 'source.mp4'
 formats = [
     'bv*[height<=720]+ba/b[height<=720]/best',
     'best[ext=mp4][height<=720]/best[height<=720]/best',
-    'best',
+    None,
 ]
 last_error = ''
 for attempt, selected_format in enumerate(formats, start=1):
@@ -110,8 +120,14 @@ for attempt, selected_format in enumerate(formats, start=1):
     command = [
         'yt-dlp', '--ignore-config', '--no-playlist',
         '--retries', '10', '--fragment-retries', '10',
-        '--socket-timeout', '30', '--format', selected_format,
+        '--socket-timeout', '30',
+        '--js-runtimes', f'deno:{deno_path}',
+        '--remote-components', 'ejs:github',
         '--merge-output-format', 'mp4',
+    ]
+    if selected_format:
+        command += ['--format', selected_format]
+    command += [
         '--output', str(WORK_DIR / 'source.%(ext)s'), VIDEO_URL,
     ]
     print(f'⬇️ Download attempt {attempt}/{len(formats)} with format: {selected_format}', flush=True)

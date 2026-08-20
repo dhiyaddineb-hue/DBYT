@@ -12,6 +12,8 @@ YouTube → yt-dlp داخل Colab → Whisper → ترجمة → Fasih-TTS-V1 �
 
 يحتاج التشغيل إلى جلسة Google Colab، ويفضل اختيار **GPU** من `Runtime → Change runtime type`. يستطيع المسار استخدام CPU، لكن نموذج Fasih وWhisper سيكونان أبطأ بكثير. النموذج الموصى به للعربية هو `NightPrince/Fasih-TTS-V1`، وهو صوت ذكوري احترافي للفصحى مبني على XTTS-v2. يختار الدفتر تلقائيًا مقطعًا صوتيًا قصيرًا من المصدر لاستعماله كمرجع للصوت.
 
+الخلية الأولى تثبت `yt-dlp[default]` و`yt-dlp-ejs` وتثبت **Deno** تلقائيًا. يحتاج yt-dlp الحديث إلى JavaScript runtime وEJS لحل تحديات YouTube؛ لذلك لا تتجاوز الخلية الأولى حتى تنجح رسالة إصدار Deno.
+
 > **تنبيه الترخيص:** بطاقة Fasih-TTS-V1 تذكر أن النموذج موزع وفق Coqui Public Model License، مع استخدام غير تجاري وإسناد. لا تستخدمه تجاريًا قبل مراجعة الرخصة والشروط الحالية.
 
 ## إعداد GitHub Secret في Colab
@@ -26,7 +28,7 @@ DBYT_COLAB_TOKEN
 
 ## التشغيل
 
-افتح [Notebook الدبلجة الكاملة](https://colab.research.google.com/github/dhiyaddineb-hue/DBYT/blob/main/notebooks/DBYT_colab_full_dubbing.ipynb)، ثم شغّل الخلايا بالترتيب. في خلية الإعدادات غيّر `VIDEO_URL` فقط، واختر `TTS_ENGINE = "fasih"` للعربية الفصحى. اختر `sherpa` إذا لم يتوفر GPU أو أردت مسارًا أخف يعمل محليًا.
+افتح [Notebook الدبلجة الكاملة](https://colab.research.google.com/github/dhiyaddineb-hue/DBYT/blob/main/notebooks/DBYT_colab_full_dubbing.ipynb)، ثم شغّل الخلايا بالترتيب. في خلية الإعدادات غيّر `VIDEO_URL` فقط، واختر `TTS_ENGINE = "fasih"` للعربية الفصحى. اختر `sherpa` إذا لم يتوفر GPU أو أردت مسارًا أخف يعمل محليًا. إذا فشلت الخلية 3، اطبع آخر جزء من `yt-dlp said:`؛ فالخلية أصبحت تعرض سبب الخطأ الحقيقي وتجرب صيغًا متعددة.
 
 يُفضّل استخدام `GRANULARITY = "segment"` للفيديوهات الطويلة؛ فهو أسرع من توليد صوت لكل كلمة، مع بقاء المحاذاة على مستوى الجملة. يمكن اختيار `word` عندما تكون دقة التوقيت أهم من سرعة التنفيذ.
 
