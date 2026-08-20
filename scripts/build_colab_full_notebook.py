@@ -225,7 +225,7 @@ API_HEADERS = {
 archive_response = requests.get(f'{API_ROOT}/tarball/main', headers=API_HEADERS, timeout=180)
 if not archive_response.ok:
     raise RuntimeError(f'GitHub source download failed ({archive_response.status_code})')
-archive_root = Path('/content/dbty_repo_archive')
+archive_root = WORK_DIR / 'repo_archive'
 if archive_root.exists():
     shutil.rmtree(archive_root)
 archive_root.mkdir(parents=True)
@@ -250,14 +250,52 @@ if 'source_path' not in globals() or not Path(source_path).exists():
     raise RuntimeError('ملف المصدر غير موجود؛ شغّل الخلية 3 أولًا.')
 if TTS_ENGINE == 'fasih' and ('reference_path' not in globals() or not Path(reference_path).exists()):
     raise RuntimeError('المقطع المرجعي غير موجود؛ شغّل الخلية 4 أولًا.')
-if 'REPO_DIR' not in globals():
-    raise RuntimeError('REPO_DIR غير موجود؛ شغّل الخلية 5 لجلب كود DBYT أولًا.')
-REPO_DIR = Path(REPO_DIR).resolve()
-BACKEND_DIR = REPO_DIR / 'backend'
-if not (BACKEND_DIR / 'app' / 'services' / 'pipeline.py').is_file():
-    raise RuntimeError(f'كود DBYT غير مكتمل داخل REPO_DIR: {REPO_DIR}')
-os.chdir(REPO_DIR)
-sys.path.insert(0, str(BACKEND_DIR))
+def _ensure_repo_code():
+    global REPO_DIR
+    raw_repo_dir = globals().get('REPO_DIR')
+    candidate = Path(raw_repo_dir).expanduser().resolve() if raw_repo_dir else None
+    if candidate is None or not (candidate / 'backend' / 'app' / 'services' / 'pipeline.py').is_file():
+        if not GITHUB_TOKEN:
+            raise RuntimeError('GITHUB_TOKEN غير موجود؛ لا يمكن جلب كود DBYT تلقائيًا.')
+        import io, tarfile
+        api_root = f'https://api.github.com/repos/{GITHUB_REPO}'
+        api_headers = {
+            'Authorization': f'Bearer {GITHUB_TOKEN}',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        }
+        response = requests.get(f'{api_root}/tarball/main', headers=api_headers, timeout=180)
+        if not response.ok:
+            raise RuntimeError(f'GitHub source download failed ({response.status_code})')
+        archive_root = WORK_DIR / 'repo_archive'
+        if archive_root.exists():
+            shutil.rmtree(archive_root)
+        archive_root.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(response.content), mode='r:gz') as bundle:
+            base = archive_root.resolve()
+            for member in bundle.getmembers():
+                target = (archive_root / member.name).resolve()
+                if target != base and base not in target.parents:
+                    raise RuntimeError('Unsafe path in GitHub source archive')
+            bundle.extractall(archive_root)
+        roots = [path for path in archive_root.iterdir() if path.is_dir()]
+        if len(roots) != 1:
+            raise RuntimeError('Unexpected GitHub source archive layout')
+        candidate = roots[0]
+    REPO_DIR = Path(candidate).resolve()
+    backend_dir = REPO_DIR / 'backend'
+    if not (backend_dir / 'app' / 'services' / 'pipeline.py').is_file():
+        raise RuntimeError(f'كود DBYT غير مكتمل داخل REPO_DIR: {REPO_DIR}')
+    os.chdir(REPO_DIR)
+    sys.path.insert(0, str(backend_dir))
+    import importlib
+    importlib.invalidate_caches()
+    for module_name in list(sys.modules):
+        if module_name == 'app' or module_name.startswith('app.'):
+            del sys.modules[module_name]
+    return backend_dir
+
+BACKEND_DIR = _ensure_repo_code()
 from app.services.pipeline import DubbingPipeline
 
 work_dir = WORK_DIR / 'pipeline'
