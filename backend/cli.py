@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="DBYT — professional video dubbing")
     p.add_argument("input", help="YouTube URL or local media file path")
     p.add_argument("--target-language", default="ar", help="Target language code")
-    p.add_argument("--engine", default="edge", choices=["edge", "elevenlabs", "bark", "xtts", "piper", "sherpa"])
+    p.add_argument("--engine", default="edge", choices=["edge", "elevenlabs", "bark", "xtts", "piper", "sherpa", "fasih"])
     p.add_argument("--voice", default=None, help="Optional TTS voice override")
     p.add_argument("--project-name", default="", help="Project name (auto from title if empty)")
     p.add_argument("--keep-background", default="true", choices=["true", "false"])

@@ -26,8 +26,9 @@
 | 🎯 **دقة على مستوى الكلمة** | كل كلمة تُولَّد وتُمدَّد وتوضع في لحظتها الزمنية الدقيقة في الفيديو |
 | 👄 **مزامنة شفاه (Wav2Lip)** | إعادة تحريك الفم ليطابق الصوت الجديد — يبدو الفيديو **أصلياً لا دوبلاج** |
 | 🎵 **خلفية موسيقية** | إبقاء الموسيقى والأصوات الخلفية تحت الصوت الجديد |
-| 🧩 **محركات صوت متعددة** | Edge-TTS (مجاني) / ElevenLabs (مشاعر حقيقية) / Bark / XTTS |
-| ☁️ **GitHub Actions** | شغّل خط أنابيب الدوبلاج على خوادم GitHub دون جهاز قوي |
+| 🧩 **محركات صوت متعددة** | Fasih-TTS-V1 للعربية الفصحى / Sherpa-ONNX المحلي / Edge / XTTS |
+| ☁️ **Colab GPU** | شغّل التنزيل والدبلجة كاملة داخل جلسة Colab |
+| 🗄️ **GitHub للتخزين** | احفظ المصدر والنتيجة والسجل في GitHub Releases دون تشغيل Actions |
 
 ---
 
@@ -64,7 +65,7 @@ DBYT/
 
 ### كيف يعمل الدوبلاج (خطوة بخطوة)
 
-1. **التحميل** — يستخدم DBYT مسارًا مصرحًا به مثل `yt-dlp` مع Proxy أو Cobalt API؛ browser downloader العام اختياري وليس مسارًا مضمونًا.
+1. **التحميل** — Notebook Colab يستخدم `yt-dlp` داخل Colab، خارج شبكة GitHub Actions المحجوبة.
 2. **النسخ** — `faster-whisper` يستخرج الكلام مع **توقيت كل كلمة**.
 3. **الترجمة** — `deep-translator` (أو OpenAI) يترجم كل جملة للغة الهدف.
 4. **الانفعال** — `emotion.py` يكتشف شعور كل جملة ويحوّله لمعاملات نبرة
@@ -105,14 +106,11 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 docker compose up --build
 ```
 
-### 3) التشغيل عبر GitHub Actions (مؤقت)
+### 3) التشغيل الكامل عبر Google Colab — المسار الموصى به
 
-1. اذهب إلى تبويب **Actions** في المستودع.
-2. اختر **Dubbing Pipeline** ثم **Run workflow**.
-3. أدخل رابط يوتيوب واللغة الهدف، ثم شغّل.
-4. حمّل النتيجة من **Artifacts** (`dubbed-video`).
+افتح [Notebook الدبلجة الكاملة](https://colab.research.google.com/github/dhiyaddineb-hue/DBYT/blob/main/notebooks/DBYT_colab_full_dubbing.ipynb)، ضع `DBYT_COLAB_TOKEN` في Colab Secrets، ثم شغّل الخلايا بالترتيب. ينفذ Colab التنزيل وWhisper والترجمة وFasih-TTS-V1 وffmpeg، ثم يرفع `source.mp4` والفيديو المدبلج و`run.json` إلى GitHub Release.
 
-هذا المسار يعمل على runner مؤقت، وقد يحجب YouTube عنوان IP الخاص به. إذا كان تنزيل YouTube هو المشكلة، استخدم المسار الهجين الموثق في [`docs/COLAB_PIPELINE.md`](docs/COLAB_PIPELINE.md): ينزّل Colab الفيديو ثم يبدأ GitHub Actions المعالجة من ملف محلي.
+لا يحتاج هذا المسار إلى تشغيل GitHub Actions. استخدم [`docs/COLAB_FULL_PIPELINE.md`](docs/COLAB_FULL_PIPELINE.md) للتعليمات التفصيلية. يبقى مسار Actions القديم متاحًا للاختبارات، لكنه ليس المسار الرئيسي للدبلجة.
 
 للتشغيل المستمر استخدم ملفات [`deploy/README.md`](deploy/README.md) و`deploy/docker-compose.prod.yml`.
 
@@ -126,10 +124,10 @@ docker compose up --build
 
 | المحرك | الجودة | المشاعر | التكلفة | ملاحظات |
 |---|---|---|---|---|
-| **Edge-TTS** | جيدة جداً | عبر تعديل النبرة | مجاني | الافتراضي، سريع على CPU |
-| **ElevenLabs** | ممتازة (بشرية) | حقيقية (أصلية) | مدفوع | ضع `DBYT_ELEVENLABS_API_KEY` |
-| **Bark** (Suno) | جيدة | أصيلة (رموز انفعال) | مجاني | ثقيل، يفضّل GPU |
-| **XTTS-v2** (Coqui) | ممتازة | استنساخ صوت المتحدث | مجاني | يفضّل GPU |
+| **Fasih-TTS-V1** | ممتازة للعربية الفصحى | صوت عربي احترافي ثابت | غير تجاري وفق CPML | الخيار الموصى به في Colab مع GPU؛ يحتاج مقطعًا مرجعيًا |
+| **Sherpa-ONNX** | جيدة وعملية | محدودة | محلي | بديل خفيف يعمل دون GPU أو خدمة خارجية |
+| **XTTS-v2** (Coqui) | ممتازة متعددة اللغات | استنساخ صوت المتحدث | وفق CPML | يفضّل GPU؛ Fasih مبني عليه ومحسن للعربية |
+| **Edge-TTS** | جيدة جداً | عبر تعديل النبرة | مجاني | اختياري، يعتمد على خدمة خارجية وقد يُحجب |
 
 **لأعلى جودة مشاعر**، فعّل ElevenLabs:
 ```bash
@@ -183,4 +181,4 @@ DBYT_ELEVENLABS_API_KEY=your-key
 ## ⚖️ الترخيص
 
 مفتوح المصدر — راجع [LICENSE](LICENSE). الأجزاء المستندة لمشاريع مفتوحة المصدر
-(Whisper، yt-dlp، edge-tts، deep-translator، Bark، XTTS) تخضع لتراخيصها الخاصة.
+(Whisper، yt-dlp، edge-tts، deep-translator، Sherpa، XTTS، وFasih) تخضع لتراخيصها الخاصة. نموذج Fasih-TTS-V1 غير تجاري وفق بطاقة نموذجه، ويجب التحقق من شروطه قبل الاستخدام التجاري.

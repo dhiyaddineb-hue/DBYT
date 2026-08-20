@@ -57,6 +57,8 @@ def get_engine(name: Optional[str] = None):
         return PiperEngine()
     if name == "sherpa":
         return SherpaEngine()
+    if name == "fasih":
+        return FasihEngine()
     raise ValueError(f"Unknown TTS engine: {name}")
 
 
@@ -361,6 +363,88 @@ class SherpaEngine:
                 wf.setsampwidth(2)
                 wf.setframerate(audio.sample_rate)
                 wf.writeframes(pcm16.tobytes())
+
+        await asyncio.to_thread(_run)
+        return out_path
+
+
+class FasihEngine:
+    """Fasih-TTS-V1: high-quality Arabic MSA voice on GPU Colab.
+
+    The model is a fine-tuned XTTS-v2 checkpoint. It requires a short reference
+    clip for speaker conditioning; the full Colab notebook extracts that clip
+    from the downloaded source video automatically.
+    """
+
+    name = "fasih"
+    model_id = "NightPrince/Fasih-TTS-V1"
+
+    def __init__(self):
+        self._model = None
+        self._conditioning = None
+        self._reference = None
+
+    def _load(self, reference: Path):
+        import torch
+        from huggingface_hub import snapshot_download
+        from TTS.tts.configs.xtts_config import XttsConfig
+        from TTS.tts.models.xtts import Xtts
+
+        model_dir = Path(snapshot_download(self.model_id))
+        config = XttsConfig()
+        config.load_json(str(model_dir / "config.json"))
+        model = Xtts.init_from_config(config)
+        model.load_checkpoint(
+            config,
+            checkpoint_path=str(model_dir / "model.pth"),
+            vocab_path=str(model_dir / "vocab.json"),
+            use_deepspeed=False,
+        )
+        if torch.cuda.is_available():
+            model.cuda()
+        model.eval()
+        self._model = model
+        self._conditioning = model.get_conditioning_latents(audio_path=[str(reference)])
+        self._reference = str(reference)
+
+    async def synthesize(
+        self,
+        text: str,
+        lang: str,
+        out_path: Path,
+        emotion: str = "neutral",
+        rate: float = 1.0,
+        pitch: float = 0,
+        volume: float = 0,
+        voice: Optional[str] = None,
+    ) -> Path:
+        import asyncio
+        import numpy as np
+        import soundfile as sf
+
+        def _run():
+            reference = Path(voice) if voice else None
+            if reference is None or not reference.is_file():
+                raise RuntimeError("Fasih requires a reference WAV passed with --voice")
+            if self._model is None or self._reference != str(reference):
+                self._load(reference)
+            gpt_cond, speaker = self._conditioning
+            result = self._model.inference(
+                text,
+                lang,
+                gpt_cond,
+                speaker,
+                temperature=0.65,
+                repetition_penalty=2.0,
+            )
+            samples = result["wav"]
+            if hasattr(samples, "detach"):
+                samples = samples.detach().cpu().numpy()
+            samples = np.asarray(samples, dtype=np.float32).reshape(-1)
+            if not samples.size:
+                raise RuntimeError("Fasih returned empty audio")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            sf.write(str(out_path), samples, 24000, subtype="PCM_16")
 
         await asyncio.to_thread(_run)
         return out_path
