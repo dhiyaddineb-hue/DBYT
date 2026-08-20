@@ -20,6 +20,9 @@ concurrency:
   group: dubbing-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  DBYT_WPC_BROWSER: /usr/bin/google-chrome
+
 jobs:
   dub:
     runs-on: ubuntu-latest
@@ -66,8 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           node --version
+          google-chrome --version
           ffmpeg -version | head -n 1
-          python -c "import yt_dlp; print('yt-dlp', yt_dlp.version.__version__)"
+          python -c "import importlib.metadata as m; import yt_dlp; print('yt-dlp', yt_dlp.version.__version__); print('wpc', m.version('yt-dlp-getpot-wpc')); print('bgutil', m.version('bgutil-ytdlp-pot-provider'))"
 
       - name: Start YouTube PO-token provider
         run: |
