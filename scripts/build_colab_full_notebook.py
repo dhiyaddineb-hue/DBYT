@@ -250,6 +250,13 @@ if 'source_path' not in globals() or not Path(source_path).exists():
     raise RuntimeError('ملف المصدر غير موجود؛ شغّل الخلية 3 أولًا.')
 if TTS_ENGINE == 'fasih' and ('reference_path' not in globals() or not Path(reference_path).exists()):
     raise RuntimeError('المقطع المرجعي غير موجود؛ شغّل الخلية 4 أولًا.')
+if 'REPO_DIR' not in globals():
+    raise RuntimeError('REPO_DIR غير موجود؛ شغّل الخلية 5 لجلب كود DBYT أولًا.')
+REPO_DIR = Path(REPO_DIR).resolve()
+if not (REPO_DIR / 'backend' / 'app' / 'services' / 'pipeline.py').is_file():
+    raise RuntimeError(f'كود DBYT غير مكتمل داخل REPO_DIR: {REPO_DIR}')
+os.chdir(REPO_DIR)
+sys.path.insert(0, str(REPO_DIR))
 from backend.app.services.pipeline import DubbingPipeline
 
 work_dir = WORK_DIR / 'pipeline'
