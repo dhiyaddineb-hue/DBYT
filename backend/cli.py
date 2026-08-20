@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -39,6 +40,24 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _download_source(url: str, out_dir: Path) -> Path:
+    """Download through Cobalt in Chrome first, then fall back to yt-dlp."""
+    use_cobalt = os.environ.get("DBYT_COBALT_BROWSER", "1").strip().lower() not in {
+        "0", "false", "no", "off"
+    }
+    if use_cobalt:
+        try:
+            from backend.app.services.cobalt_browser import download_via_browser
+
+            print("🌐 Downloader: Chrome → cobalt.tools → local workspace")
+            return download_via_browser(url, out_dir)
+        except Exception as exc:  # noqa: BLE001 - deliberate downloader fallback
+            print(f"⚠️ Cobalt browser download failed: {str(exc)[:300]}")
+            print("↩️ Falling back to yt-dlp…")
+
+    return youtube.download_media(url, out_dir, prefer_audio=False)
+
+
 def main() -> None:
     args = parse_args()
     target = args.input.strip()
@@ -58,7 +77,7 @@ def main() -> None:
         print(f"🎬 Dubbing: {meta.get('title')}")
         print(f"🌍 Target language: {args.target_language} | Engine: {args.engine}")
 
-        media = youtube.download_media(target, work_dir / "source", prefer_audio=False)
+        media = _download_source(target, work_dir / "source")
     else:
         media = Path(target)
         if not media.exists():
