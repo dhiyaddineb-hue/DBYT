@@ -68,7 +68,18 @@ def _configure_chrome(download_dir: Path):
             "safebrowsing.enabled": True,
         },
     )
-    return webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(options=options)
+    # Explicitly allow downloads in headless Chrome. Chrome's download
+    # restrictions can otherwise ignore the normal preferences in CI.
+    driver.execute_cdp_cmd(
+        "Browser.setDownloadBehavior",
+        {
+            "behavior": "allow",
+            "downloadPath": str(download_dir.resolve()),
+            "eventsEnabled": True,
+        },
+    )
+    return driver
 
 
 def _submit_in_ui(driver, youtube_url: str) -> None:
@@ -95,24 +106,20 @@ def _submit_in_ui(driver, youtube_url: str) -> None:
     text_input.send_keys(Keys.ENTER)
 
     # Some revisions expose a separate "download" button after validating the URL.
-    def click_download_button(d):
-        buttons = d.find_elements(By.TAG_NAME, "button")
-        for button in buttons:
-            label = " ".join(
-                part
-                for part in (
-                    button.text,
-                    button.get_attribute("aria-label"),
-                    button.get_attribute("title"),
-                )
-                if part
-            ).lower()
-            if "download" in label and button.is_enabled() and button.is_displayed():
-                button.click()
-                return True
-        return False
-
-    click_download_button(driver)
+    buttons = driver.find_elements(By.TAG_NAME, "button")
+    for button in buttons:
+        label = " ".join(
+            part
+            for part in (
+                button.text,
+                button.get_attribute("aria-label"),
+                button.get_attribute("title"),
+            )
+            if part
+        ).lower()
+        if "download" in label and button.is_enabled() and button.is_displayed():
+            button.click()
+            break
 
 
 def download_via_browser(url: str, out_dir: Path, timeout: int = 180) -> Path:
@@ -127,11 +134,12 @@ def download_via_browser(url: str, out_dir: Path, timeout: int = 180) -> Path:
     try:
         # Cobalt officially supports URL-prefill through the hash fragment and
         # automatically starts the save flow from that link.
-        target = f"{_COBALT_URL}#{quote(url, safe=':/?=&%_-.,') }"
+        target = f"{_COBALT_URL}#{quote(url, safe=':/?=&%_-.,')}"
         driver.get(target)
 
         try:
-            result = _wait_for_download(out_dir, timeout=25)
+            # Give the automatic fragment-driven save a generous head start.
+            result = _wait_for_download(out_dir, timeout=45)
         except TimeoutError:
             # If a site revision does not autoplay from the fragment, use the
             # actual form/button just like a human visitor.
