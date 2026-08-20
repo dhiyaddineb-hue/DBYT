@@ -59,6 +59,9 @@ def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefe
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            # Always set a flexible format so we never hit
+            # "Requested format is not available" across player clients.
+            "format": "bestaudio/best" if prefer_audio else "best",
             "extractor_args": {"youtube": {"player_client": [client]}},
         }
         # Use cookies if available (bypasses YouTube's datacenter bot-wall)
@@ -67,14 +70,12 @@ def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefe
         if download:
             opts["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
             if prefer_audio:
-                opts["format"] = "bestaudio/best"
                 opts["postprocessors"] = [{
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "m4a",
                     "preferredquality": "192",
                 }]
             else:
-                opts["format"] = "best[height<=1080]/best"
                 opts["merge_output_format"] = "mp4"
         else:
             opts["skip_download"] = True
@@ -122,18 +123,24 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
 
     Returns the path to the downloaded file (audio as .m4a by default).
 
-    Tries, in order:
-      1. yt-dlp across several player clients (android/tv/mweb/ios/web)
-      2. Invidious / Piped public instances (alternative front-ends that proxy
-         the video) — solves the "YouTube blocked" problem.
+    Strategy (each stage falls through to the next on failure):
+      1. Invidious / Piped public instances — FREE, no login, and they proxy
+         YouTube from residential-ish IPs, bypassing the datacenter bot-wall.
+      2. yt-dlp across several player clients (android/tv/mweb/ios/web),
+         using cookies if a cookies file is present.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # 1) Try the free Invidious/Piped front-ends first (no login needed)
     try:
-        info, filename = _try_extract(url, download=True, out_dir=out_dir, prefer_audio=prefer_audio)
-    except Exception as exc:  # noqa: BLE001 — fall back to Invidious/Piped
-        print(f"[youtube] all player clients failed ({exc}); trying Invidious/Piped…")
         filename = _download_via_frontend(url, out_dir, prefer_audio)
+        print("[youtube] downloaded via Invidious/Piped front-end ✓")
+        return Path(filename)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[youtube] front-ends failed ({str(exc)[:120]}); trying yt-dlp…")
+
+    # 2) Fall back to yt-dlp (with cookies if available)
+    info, filename = _try_extract(url, download=True, out_dir=out_dir, prefer_audio=prefer_audio)
 
     # After FFmpegExtractAudio the extension changes to m4a
     if prefer_audio and not Path(filename).exists():
