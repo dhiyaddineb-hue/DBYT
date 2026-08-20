@@ -22,6 +22,8 @@ concurrency:
 
 env:
   DBYT_WPC_BROWSER: /usr/bin/google-chrome
+  DBYT_COBALT_BROWSER: "1"
+  DBYT_COBALT_URL: https://cobalt.tools/
 
 jobs:
   dub:
@@ -65,15 +67,15 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
-      - name: Verify YouTube runtime stack
+      - name: Verify browser downloader stack
         run: |
           set -euo pipefail
           node --version
           google-chrome --version
           ffmpeg -version | head -n 1
-          python -c "import importlib.metadata as m; import yt_dlp; print('yt-dlp', yt_dlp.version.__version__); print('wpc', m.version('yt-dlp-getpot-wpc')); print('bgutil', m.version('bgutil-ytdlp-pot-provider'))"
+          python -c "import importlib.metadata as m; import selenium, yt_dlp; print('selenium', m.version('selenium')); print('yt-dlp', yt_dlp.version.__version__); print('wpc', m.version('yt-dlp-getpot-wpc')); print('bgutil', m.version('bgutil-ytdlp-pot-provider')); print('cobalt browser: OK')"
 
-      - name: Start YouTube PO-token provider
+      - name: Start YouTube PO-token provider (fallback)
         run: |
           set -euo pipefail
           provider_dir="$RUNNER_TEMP/bgutil-ytdlp-pot-provider"
