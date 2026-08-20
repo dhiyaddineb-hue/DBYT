@@ -38,7 +38,17 @@ def _slugify(title: str, max_len: int = 60) -> str:
     return slug[:max_len].strip("-") or "project"
 
 
-_PLAYER_CLIENTS = ["web", "android", "tv", "mweb", "ios"]
+# Embedded clients often remain available when the browser client is challenged.
+# Keep them first so an expired cookie cannot block an otherwise public video.
+_PLAYER_CLIENTS = [
+    "android_vr",
+    "tv_embedded",
+    "android",
+    "web",
+    "web_embedded",
+    "mweb",
+    "ios",
+]
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -132,7 +142,7 @@ def _try_extract(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     has_cookies = _has_usable_cookies(_COOKIES_PATH)
-    clients = _PLAYER_CLIENTS if has_cookies else ["android", "tv", "mweb", "ios", "web"]
+    clients = _PLAYER_CLIENTS
     last_error: Optional[Exception] = None
 
     for client in clients:
