@@ -44,7 +44,7 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 code("""#@title 1) تثبيت أدوات Colab
 !sudo apt-get update -qq
 !sudo apt-get install -y -qq ffmpeg
-!pip -q install yt-dlp requests faster-whisper deep-translator soundfile huggingface_hub "coqui-tts==0.27.5"
+!pip -q install -U "yt-dlp[default]" requests faster-whisper deep-translator soundfile huggingface_hub "coqui-tts==0.27.5"
 
 from pathlib import Path
 import asyncio, json, os, re, shutil, subprocess, sys, uuid
@@ -87,22 +87,36 @@ print(f'✅ Settings loaded: {GITHUB_REPO} | engine={TTS_ENGINE} | target={TARGE
 
 code("""#@title 3) تنزيل الفيديو من YouTube داخل Colab
 source_path = WORK_DIR / 'source.mp4'
-for old in WORK_DIR.glob('source.*'):
-    old.unlink(missing_ok=True)
-
-command = [
-    'yt-dlp', '--no-playlist',
-    '--format', 'bv*[height<=720]+ba/b[height<=720]/best',
-    '--merge-output-format', 'mp4',
-    '--output', str(WORK_DIR / 'source.%(ext)s'), VIDEO_URL,
+formats = [
+    'bv*[height<=720]+ba/b[height<=720]/best',
+    'best[ext=mp4][height<=720]/best[height<=720]/best',
+    'best',
 ]
-print('⬇️ Downloading in Colab…')
-subprocess.run(command, check=True)
+last_error = ''
+for attempt, selected_format in enumerate(formats, start=1):
+    for old in WORK_DIR.glob('source.*'):
+        old.unlink(missing_ok=True)
+    command = [
+        'yt-dlp', '--ignore-config', '--no-playlist',
+        '--retries', '10', '--fragment-retries', '10',
+        '--socket-timeout', '30', '--format', selected_format,
+        '--merge-output-format', 'mp4',
+        '--output', str(WORK_DIR / 'source.%(ext)s'), VIDEO_URL,
+    ]
+    print(f'⬇️ Download attempt {attempt}/{len(formats)} with format: {selected_format}', flush=True)
+    completed = subprocess.run(command, text=True, capture_output=True)
+    if completed.returncode == 0:
+        print(completed.stdout[-2000:], flush=True)
+        break
+    last_error = (completed.stderr or completed.stdout or 'unknown yt-dlp error')
+    print(f'⚠️ Attempt {attempt} failed; yt-dlp said:\\n{last_error[-4000:]}', flush=True)
+else:
+    raise RuntimeError(f'yt-dlp failed for every format. Last error:\\n{last_error[-6000:]}')
 
 candidates = sorted(WORK_DIR.glob('source.*'))
 if not candidates:
     raise FileNotFoundError('yt-dlp انتهى دون ملف مصدر')
-source_path = candidates[0]
+source_path = WORK_DIR / 'source.mp4' if (WORK_DIR / 'source.mp4').exists() else candidates[0]
 if source_path.suffix.lower() != '.mp4':
     converted = WORK_DIR / 'source.mp4'
     subprocess.run(['ffmpeg', '-y', '-i', str(source_path), '-c', 'copy', str(converted)], check=True)
