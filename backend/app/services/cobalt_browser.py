@@ -166,6 +166,59 @@ def _candidate_input(driver):
     return scored[0][1] if scored else None
 
 
+def _set_input_value_js(driver, field, value: str) -> None:
+    """Set a controlled React/Vue/Svelte input without relying on a clickable overlay."""
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        const value = arguments[1];
+        const proto = Object.getPrototypeOf(el);
+        const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (descriptor && descriptor.set) {
+          descriptor.set.call(el, value);
+        } else {
+          el.value = value;
+        }
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+        el.dispatchEvent(new Event('blur', {bubbles: true}));
+        """,
+        field,
+        value,
+    )
+
+
+def _submit_form_js(driver, field) -> bool:
+    """Try the enclosing form, then common submit controls, without a physical click."""
+    return bool(
+        driver.execute_script(
+            """
+            const field = arguments[0];
+            const form = field.closest('form');
+            if (form) {
+              if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+              } else {
+                form.submit();
+              }
+              return true;
+            }
+            const root = field.closest('main,section,div') || document;
+            const buttons = Array.from(root.querySelectorAll('button,input[type=submit]'));
+            const btn = buttons.find(b => /download|submit|go|start|convert|fetch|search/i.test(
+              ((b.innerText || '') + ' ' + (b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '')).trim()
+            ));
+            if (btn) {
+              btn.click();
+              return true;
+            }
+            return false;
+            """,
+            field,
+        )
+    )
+
+
 def _click_download(driver) -> bool:
     from selenium.webdriver.common.by import By
 
@@ -217,13 +270,32 @@ def _try_submit(driver, youtube_url: str, label: str) -> None:
     if field is None:
         raise RuntimeError("URL input field not found")
     print(f"📝 [{label}] URL field found; submitting", flush=True)
-    field.click()
-    field.send_keys(Keys.CONTROL, "a")
-    field.send_keys(youtube_url)
-    field.send_keys(Keys.ENTER)
-    time.sleep(2)
-    clicked = _click_download(driver)
-    print(f"🖱️ [{label}] download button clicked={clicked}", flush=True)
+
+    # Prefer DOM-level interaction. It avoids the common Selenium
+    # ElementClickInterceptedException caused by animated overlays/focus layers.
+    try:
+        _set_input_value_js(driver, field, youtube_url)
+        submitted = _submit_form_js(driver, field)
+        print(f"🧩 [{label}] DOM submit={submitted}", flush=True)
+        if submitted:
+            time.sleep(2)
+            clicked = _click_download(driver)
+            print(f"🖱️ [{label}] download button clicked={clicked}", flush=True)
+            return
+    except Exception as exc:
+        print(f"⚠️ [{label}] DOM submit failed: {str(exc)[:180]}", flush=True)
+
+    # Last resort: keyboard interaction does not require clicking the input.
+    try:
+        driver.execute_script("arguments[0].focus();", field)
+        field.send_keys(Keys.CONTROL, "a")
+        field.send_keys(youtube_url)
+        field.send_keys(Keys.ENTER)
+        time.sleep(2)
+        clicked = _click_download(driver)
+        print(f"🖱️ [{label}] keyboard submit; download button clicked={clicked}", flush=True)
+    except Exception as exc:
+        raise RuntimeError(f"Could not submit URL: {exc}") from exc
 
 
 def _diagnostic_screenshot(driver, diagnostics_dir: Path, name: str) -> None:
@@ -258,7 +330,6 @@ def _visit_site(driver, name: str, site_url: str, youtube_url: str, download_dir
     except TimeoutError:
         pass
 
-    # Fall back to the actual site form.
     _try_submit(driver, youtube_url, label)
     print(f"🌐 [{label}] waiting for browser download (40s)", flush=True)
     try:
@@ -270,7 +341,7 @@ def _visit_site(driver, name: str, site_url: str, youtube_url: str, download_dir
 
 def download_via_browser(url: str, out_dir: Path, timeout: int | None = None) -> Path:
     """Try many downloader sites in Chrome and return the first valid media file."""
-    del timeout  # kept for API compatibility; per-site limits are explicit
+    del timeout
     out_dir.mkdir(parents=True, exist_ok=True)
     download_dir = out_dir / ".browser-download"
     diagnostics_dir = out_dir / ".browser-diagnostics"
@@ -289,10 +360,7 @@ def download_via_browser(url: str, out_dir: Path, timeout: int | None = None) ->
                 safe_ext = re.sub(r"[^a-z0-9]", "", result.suffix.lower().lstrip(".")) or "mp4"
                 destination = out_dir / f"source.{safe_ext}"
                 shutil.copy2(result, destination)
-                print(
-                    f"✅ Browser downloader succeeded: {name} -> {destination.name} ({destination.stat().st_size} bytes)",
-                    flush=True,
-                )
+                print(f"✅ Browser downloader succeeded: {name} -> {destination.name} ({destination.stat().st_size} bytes)", flush=True)
                 return destination
             except Exception as exc:
                 message = str(exc).replace("\n", " ")[:220]
