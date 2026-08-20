@@ -112,6 +112,9 @@ jobs:
           YOUTUBE_URL: ${{ inputs.youtube_url }}
           TARGET_LANGUAGE: ${{ inputs.target_language }}
           DBYT_YOUTUBE_PROXIES: ${{ secrets.YOUTUBE_PROXIES }}
+          DBYT_COBALT_URL: ${{ secrets.COBALT_API_URL }}
+          DBYT_COBALT_API_KEY: ${{ secrets.COBALT_API_KEY }}
+          DBYT_INVIDIOUS_INSTANCES: ${{ secrets.INVIDIOUS_INSTANCES }}
         run: python -u -m backend.cli "$YOUTUBE_URL" --target-language "$TARGET_LANGUAGE"
 
       - name: Commit generated workspace output

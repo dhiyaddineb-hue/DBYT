@@ -135,6 +135,87 @@ def test_configured_proxies():
             os.environ["DBYT_YOUTUBE_PROXIES"] = previous
 
 
+def test_configured_frontends_and_cobalt():
+    import os
+
+    previous = {
+        name: os.environ.get(name)
+        for name in (
+            "DBYT_INVIDIOUS_INSTANCES",
+            "DBYT_COBALT_URL",
+            "DBYT_COBALT_API_KEY",
+        )
+    }
+    try:
+        os.environ["DBYT_INVIDIOUS_INSTANCES"] = (
+            " https://one.example,\nhttps://two.example/ "
+        )
+        os.environ["DBYT_COBALT_URL"] = " https://cobalt.example/ "
+        os.environ["DBYT_COBALT_API_KEY"] = "secret-value"
+        assert youtube._configured_frontends() == (
+            "https://one.example",
+            "https://two.example",
+        )
+        assert youtube._configured_cobalt() == (
+            "https://cobalt.example",
+            "secret-value",
+        )
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def test_cobalt_key_not_forwarded_to_external_tunnel():
+    same_host = youtube._cobalt_headers(
+        "https://cobalt.example", "secret", "https://cobalt.example/tunnel/1"
+    )
+    external_host = youtube._cobalt_headers(
+        "https://cobalt.example", "secret", "https://googlevideo.example/file"
+    )
+    assert same_host["Authorization"] == "Api-Key secret"
+    assert "Authorization" not in external_host
+
+
+def test_cobalt_audio_tunnel_payload():
+    import json
+    import tempfile
+    from unittest.mock import patch
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "status": "tunnel",
+                "url": "https://cobalt.example/tunnel/1",
+                "filename": "source.mp3",
+            }).encode("utf-8")
+
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        youtube.urllib.request, "urlopen", return_value=Response()
+    ) as open_url, patch.object(youtube, "_download_url") as download_url:
+        output = youtube._download_via_cobalt(
+            "https://www.youtube.com/watch?v=CAwRm-VO-kU",
+            Path(tmp),
+            True,
+            "https://cobalt.example",
+            "secret",
+        )
+
+    request = open_url.call_args.args[0]
+    assert json.loads(request.data.decode("utf-8"))["audioFormat"] == "mp3"
+    assert request.get_header("Authorization") == "Api-Key secret"
+    assert output.name == "CAwRm-VO-kU.mp3"
+    download_url.assert_called_once()
+
+
 if __name__ == "__main__":
     import traceback
 
