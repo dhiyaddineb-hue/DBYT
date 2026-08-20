@@ -122,6 +122,7 @@ print(f'✅ Settings loaded: {GITHUB_REPO} | engine={TTS_ENGINE} | target={TARGE
 """)
 
 code("""#@title 3) تنزيل الفيديو من YouTube داخل Colab
+import time
 source_path = WORK_DIR / 'source.mp4'
 attempts = [
     ('android_vr', 'bv*[height<=720]+ba/b[height<=720]/best'),
@@ -135,7 +136,7 @@ for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
     command = [
         'yt-dlp', '--ignore-config', '--no-playlist',
         '--retries', '10', '--fragment-retries', '10',
-        '--socket-timeout', '30',
+        '--socket-timeout', '30', '--newline',
         '--js-runtimes', f'deno:{deno_path}',
         '--remote-components', 'ejs:github',
         '--merge-output-format', 'mp4',
@@ -148,12 +149,29 @@ for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
         '--output', str(WORK_DIR / 'source.%(ext)s'), VIDEO_URL,
     ]
     print(f'⬇️ Download attempt {attempt}/{len(attempts)} with client={selected_client or "default"}, format={selected_format or "auto"}', flush=True)
-    completed = subprocess.run(command, text=True, capture_output=True)
-    if completed.returncode == 0:
-        print(completed.stdout[-2000:], flush=True)
+    output_lines = []
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    ) as process:
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line.rstrip(), flush=True)
+            output_lines.append(line)
+        return_code = process.wait()
+    if return_code == 0:
+        print('✅ yt-dlp completed this attempt.', flush=True)
         break
-    last_error = (completed.stderr or completed.stdout or 'unknown yt-dlp error')
+    last_error = ''.join(output_lines) or 'unknown yt-dlp error'
     print(f'⚠️ Attempt {attempt} failed; yt-dlp said:\\n{last_error[-4000:]}', flush=True)
+    lowered_error = last_error.lower()
+    if 'sign in to confirm' in lowered_error or 'not a bot' in lowered_error or 'http error 429' in lowered_error:
+        print('ℹ️ YouTube is rate-limiting or blocking this Colab network; a new Colab runtime may be required.', flush=True)
+    if attempt < len(attempts):
+        time.sleep(min(30, 5 * attempt))
 else:
     raise RuntimeError(f'yt-dlp failed for every YouTube client/format attempt. Last error:\\n{last_error[-6000:]}')
 
