@@ -23,6 +23,8 @@ async def start_dub(req: DubbingRequest) -> JobStatusResponse:
         "voice": req.voice,
         "keep_background": req.keep_background,
         "preserve_emotions": req.preserve_emotions,
+        "granularity": req.granularity,
+        "lip_sync": req.lip_sync,
         "project_name": req.project_name,
     }
 

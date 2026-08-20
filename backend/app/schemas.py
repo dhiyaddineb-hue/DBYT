@@ -34,12 +34,14 @@ class DubbingRequest(BaseModel):
     voice: Optional[str] = None  # optional voice override
     keep_background: bool = True  # keep original audio ducked under the new voice
     preserve_emotions: bool = True  # map detected emotion -> prosody
+    granularity: Literal["word", "segment"] = "word"  # word-level precise placement
+    lip_sync: bool = False  # reanimate the mouth to the new voice (Wav2Lip)
 
 
 class JobStatusResponse(BaseModel):
     job_id: str
     status: Literal["queued", "downloading", "transcribing", "translating",
-                    "synthesizing", "mixing", "done", "error"]
+                    "synthesizing", "mixing", "lip_syncing", "done", "error"]
     progress: int = 0
     message: str = ""
     project_name: Optional[str] = None

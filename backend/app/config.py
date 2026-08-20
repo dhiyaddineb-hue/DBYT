@@ -3,6 +3,12 @@
 All settings are read from environment variables (12-factor style) so the same
 code runs locally, inside Docker, or on GitHub Actions. Provide secrets via a
 `.env` file (see `.env.example`) or the repository/runner secret store.
+
+== Workspace =================================================================
+The repository *is* the workspace. Every produced file (downloaded models,
+uploads, job logs, dubbed output) lives under a SINGLE folder: `workspace/`,
+so it can be committed back to the GitHub repository (Git LFS for binaries) —
+the sandbox has limited disk, but GitHub does not.
 """
 from __future__ import annotations
 
@@ -12,10 +18,16 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = Path(os.getenv("DBYT_DATA_DIR", BASE_DIR / "data"))
-JOBS_DIR = Path(os.getenv("DBYT_JOBS_DIR", BASE_DIR / "jobs"))
-UPLOADS_DIR = Path(os.getenv("DBYT_UPLOADS_DIR", BASE_DIR / "uploads"))
-OUTPUT_DIR = Path(os.getenv("DBYT_OUTPUT_DIR", BASE_DIR / "output"))
+
+# The single workspace folder — everything DBYT produces goes in here.
+WORKSPACE_DIR = Path(os.getenv("DBYT_WORKSPACE_DIR", BASE_DIR / "workspace"))
+
+DATA_DIR = WORKSPACE_DIR / "data"
+JOBS_DIR = WORKSPACE_DIR / "jobs"
+UPLOADS_DIR = WORKSPACE_DIR / "uploads"
+OUTPUT_DIR = WORKSPACE_DIR / "output"
+MODELS_DIR = WORKSPACE_DIR / "models"
+LOGS_DIR = WORKSPACE_DIR / "logs"
 
 
 class Settings(BaseSettings):
@@ -27,11 +39,14 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    # Directories
+    # Workspace (single folder, repo-backed)
+    workspace_dir: Path = WORKSPACE_DIR
     data_dir: Path = DATA_DIR
     jobs_dir: Path = JOBS_DIR
     uploads_dir: Path = UPLOADS_DIR
     output_dir: Path = OUTPUT_DIR
+    models_dir: Path = MODELS_DIR
+    logs_dir: Path = LOGS_DIR
 
     # Whisper transcription
     whisper_model: str = "small"  # tiny | base | small | medium | large-v3
@@ -41,6 +56,10 @@ class Settings(BaseSettings):
     # Translation
     default_target_lang: str = "ar"
     translator_backend: str = "google"  # google | openai | deepl | none
+
+    # Dubbing precision
+    granularity: str = "word"  # word (each word in its place) | segment
+    lip_sync: bool = False  # reanimate the mouth to match the new voice (Wav2Lip)
 
     # TTS
     default_engine: str = "edge"  # edge | elevenlabs | bark | xtts
@@ -55,8 +74,14 @@ class Settings(BaseSettings):
     max_upload_mb: int = 2048
     cors_origins: str = "*"
 
+    # Repository-as-workspace: after each job, commit & push produced files.
+    auto_commit: bool = False
+
     def ensure_dirs(self) -> None:
-        for d in (self.data_dir, self.jobs_dir, self.uploads_dir, self.output_dir):
+        for d in (
+            self.workspace_dir, self.data_dir, self.jobs_dir, self.uploads_dir,
+            self.output_dir, self.models_dir, self.logs_dir,
+        ):
             d.mkdir(parents=True, exist_ok=True)
 
 

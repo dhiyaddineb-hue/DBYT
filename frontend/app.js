@@ -18,6 +18,8 @@
   const engine = $("engine");
   const keepBg = $("keep-bg");
   const preserveEmotions = $("preserve-emotions");
+  const wordLevel = $("word-level");
+  const lipSync = $("lip-sync");
   const startBtn = $("start-btn");
   const ctaText = $("cta-text");
   const jobStatus = $("job-status");
@@ -193,6 +195,8 @@
       engine: engine.value,
       keep_background: keepBg.checked,
       preserve_emotions: preserveEmotions.checked,
+      granularity: wordLevel.checked ? "word" : "segment",
+      lip_sync: lipSync.checked,
       project_name: projectName.value.trim() || null,
     };
     if (currentMode === "youtube") payload.youtube_url = urlInput.value.trim();
@@ -266,6 +270,7 @@
       translating: "الترجمة",
       synthesizing: "توليد الصوت",
       mixing: "دمج الصوت",
+      lip_syncing: "مزامنة الشفاه",
       done: "اكتمل ✓",
       error: "خطأ",
     }[s] || s;

@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services import emotion, youtube
+from app.services.pipeline import _map_target_words, split_words
 
 
 def test_extract_video_id():
@@ -54,6 +55,35 @@ def test_emotion_preserve_disabled():
 def test_bark_emotion_prefix():
     assert emotion.bark_emotion_prefix("happy") == "[laughter] "
     assert emotion.bark_emotion_prefix("neutral") == ""
+
+
+def test_split_words():
+    assert split_words("hello world") == ["hello", "world"]
+    assert split_words("  a   b  ") == ["a", "b"]
+    assert split_words("") == []
+
+
+def test_map_target_words_equal_count():
+    assert _map_target_words(["bonjour", "le", "monde"], 3) == ["bonjour", "le", "monde"]
+
+
+def test_map_target_words_fewer_words():
+    # 2 target words fill 4 source slots by repeating
+    out = _map_target_words(["hi", "there"], 4)
+    assert len(out) == 4
+    assert out[0] == "hi" and out[1] == "there"
+
+
+def test_map_target_words_more_words():
+    # 6 target words squeezed into 3 slots -> chunks of 2
+    out = _map_target_words(["a", "b", "c", "d", "e", "f"], 3)
+    assert len(out) == 3
+    assert out[0] == "a b" and out[2] == "e f"
+
+
+def test_map_target_words_empty():
+    assert _map_target_words([], 3) == ["", "", ""]
+    assert _map_target_words(["x"], 0) == ["x"]
 
 
 if __name__ == "__main__":

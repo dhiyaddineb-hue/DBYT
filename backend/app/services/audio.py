@@ -51,6 +51,59 @@ def time_stretch(src: Path, dst: Path, target_duration: float) -> Path:
     return dst
 
 
+def place_clips_at_times(
+    clips: List[Tuple[Path, float]],
+    dst: Path,
+    sample_rate: int = 44100,
+) -> Path:
+    """Place audio clips at exact start times and mix them into one track.
+
+    This is the heart of *word-level* dubbing: each word's audio is dropped at
+    precisely the moment the original speaker uttered it, so the dub lines up
+    with the video "as if it were the original".
+
+    ``clips`` is a list of ``(path, start_seconds)``. Clips may overlap; we
+    mix with ffmpeg `amix` (each input delayed by its start time).
+    """
+    clips = sorted(clips, key=lambda c: c[1])
+    if not clips:
+        raise ValueError("No clips to place")
+
+    # Normalize every clip to the same codec/rate/channels so amix is safe.
+    tmp_dir = dst.parent / "placed"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    normalized: List[Tuple[Path, float]] = []
+    for i, (p, start) in enumerate(clips):
+        np_ = tmp_dir / f"{i:05d}.wav"
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(p), "-ar", str(sample_rate), "-ac", "1",
+             "-c:a", "pcm_s16le", str(np_)],
+            check=True, capture_output=True,
+        )
+        normalized.append((np_, start))
+
+    # Build a filter graph: [i:a]adelay=ms|ms[...] then amix all
+    inputs: List[str] = []
+    filters: List[str] = []
+    for i, (p, start) in enumerate(normalized):
+        inputs += ["-i", str(p)]
+        ms = int(round(start * 1000))
+        filters.append(f"[{i}:a]adelay={ms}|{ms}[d{i}]")
+    mix_inputs = "".join(f"[d{i}]" for i in range(len(normalized)))
+    filters.append(
+        f"{mix_inputs}amix=inputs={len(normalized)}:duration=longest:"
+        f"dropout_transition=3:normalize=0[a]"
+    )
+
+    graph = ";".join(filters)
+    subprocess.run(
+        ["ffmpeg", "-y", *inputs, "-filter_complex", graph,
+         "-map", "[a]", "-ar", str(sample_rate), "-ac", "2", str(dst)],
+        check=True, capture_output=True,
+    )
+    return dst
+
+
 def concat_wavs(paths: List[Path], dst: Path, silence_gap: float = 0.12) -> Path:
     """Concatenate WAV files with a tiny silence gap between segments."""
     import tempfile

@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--project-name", default="", help="Project name (auto from title if empty)")
     p.add_argument("--keep-background", default="true", choices=["true", "false"])
     p.add_argument("--preserve-emotions", default="true", choices=["true", "false"])
+    p.add_argument("--granularity", default="word", choices=["word", "segment"])
+    p.add_argument("--lip-sync", default="false", choices=["true", "false"])
     p.add_argument("--output-dir", default=str(settings.output_dir))
     return p.parse_args()
 
@@ -64,6 +66,8 @@ def main() -> None:
         voice=args.voice,
         keep_background=args.keep_background == "true",
         preserve_emotions=args.preserve_emotions == "true",
+        granularity=args.granularity,
+        lip_sync=args.lip_sync == "true",
         progress=progress,
     )
     final = asyncio.run(pipeline.run(media, work_dir / "work"))

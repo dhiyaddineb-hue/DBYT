@@ -94,6 +94,8 @@ class JobManager:
                 voice=params.get("voice"),
                 keep_background=params.get("keep_background", True),
                 preserve_emotions=params.get("preserve_emotions", True),
+                granularity=params.get("granularity", "word"),
+                lip_sync=params.get("lip_sync", False),
                 progress=self._progress(job),
             )
             final = asyncio.run(pipeline.run(media, work_dir, source_language=source_lang))
@@ -101,6 +103,7 @@ class JobManager:
                 job, status="done", progress=100, message="Dubbing complete",
                 output_path=str(final),
             )
+            _maybe_commit_to_repo(f"dub({job.id}): {job.project_name}")
         except Exception as exc:  # noqa: BLE001
             self._update(job, status="error", message="Failed", error=str(exc))
 
@@ -111,6 +114,28 @@ class JobManager:
             path.write_text(json.dumps(job.to_dict(), ensure_ascii=False, indent=2))
         except Exception:  # noqa: BLE001
             pass
+
+
+def _maybe_commit_to_repo(message: str) -> None:
+    """Persist produced files to the GitHub repository (the workspace).
+
+    Only runs when `DBYT_AUTO_COMMIT=true`. Requires git identity configured in
+    the environment (local or GitHub Actions). Failures are non-fatal — the
+    job is already done; the user can run `./scripts/sync_workspace.sh` manually.
+    """
+    import subprocess
+
+    if not settings.auto_commit:
+        return
+    try:
+        subprocess.run(["git", "add", "workspace"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"chore(workspace): {message}"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(["git", "push"], check=True, capture_output=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[auto-commit] skipped: {exc}")
 
 
 jobs = JobManager()
