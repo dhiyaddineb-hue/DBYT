@@ -60,10 +60,9 @@ class DubbingPipeline:
 
         # 1) Transcribe
         self._report(15, "Transcribing speech (Whisper)...")
-        segments = transcribe.transcribe(media_path, language=source_language)
+        segments, detected_lang = transcribe.transcribe(media_path, language=source_language)
         if not segments:
             raise RuntimeError("No speech detected in the video.")
-        detected_lang = getattr(transcribe, "detected_language", None)
         src_lang = (detected_lang or "").split("-")[0] if detected_lang else "auto"
 
         # 2) Translate

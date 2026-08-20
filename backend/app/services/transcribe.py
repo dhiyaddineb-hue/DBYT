@@ -27,8 +27,12 @@ class Segment:
     words: List[Word] = field(default_factory=list)
 
 
-def transcribe(audio_path: Path, language: Optional[str] = None) -> List[Segment]:
-    """Transcribe an audio/video file into timestamped segments."""
+def transcribe(audio_path: Path, language: Optional[str] = None):
+    """Transcribe an audio/video file into timestamped segments.
+
+    Returns a tuple ``(segments, detected_language)`` where ``detected_language``
+    is the language Whisper detected (e.g. "en", "fr"), or ``None``.
+    """
     from faster_whisper import WhisperModel
 
     model = WhisperModel(
@@ -54,7 +58,8 @@ def transcribe(audio_path: Path, language: Optional[str] = None) -> List[Segment
         if not seg.words and seg.text:
             seg.words = [Word(seg.text, seg.start, seg.end)]
 
-    return segments
+    detected = info.language if info else None
+    return segments, detected
 
 
 def duration_of(audio_path: Path) -> float:

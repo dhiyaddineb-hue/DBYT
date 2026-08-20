@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .config import settings
+from .config import BASE_DIR, settings
 from .routes import dub, upload, youtube
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
@@ -29,7 +29,7 @@ async def health() -> dict:
 
 
 # Serve the frontend (single-page app) at the root
-_frontend = settings.data_dir.parent / "frontend"
+_frontend = BASE_DIR / "frontend"
 if _frontend.exists():
     app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend")
 
