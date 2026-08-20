@@ -163,7 +163,7 @@ def _try_extract(
             options["cookiefile"] = _COOKIES_PATH
         if download:
             options["format"] = (
-                "ba/b" if prefer_audio else "bv*[height<=1080]+ba/b[height<=1080]/b"
+                "ba/b" if prefer_audio else "b"
             )
             options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
             if prefer_audio:
