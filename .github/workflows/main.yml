@@ -4,37 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       youtube_url:
-        description: "YouTube URL to dub"
-        required: false
+        description: "YouTube URL"
+        required: true
         type: string
       target_language:
-        description: "Target language (ar, fr, en, es, de, ...)"
-        required: true
+        description: "Language (ar, fr, en...)"
         default: "ar"
         type: string
-      engine:
-        description: "TTS engine (edge | elevenlabs)"
-        required: false
-        default: "edge"
-        type: string
-      project_name:
-        description: "Project name (auto-filled from title if empty)"
-        required: false
-        type: string
-      granularity:
-        description: "word = every word in its place | segment = per sentence"
-        required: false
-        default: "word"
-        type: string
-      lip_sync:
-        description: "Re-animate the mouth (Wav2Lip) — needs GPU"
-        required: false
-        default: "false"
-        type: string
-  schedule:
-    - cron: "0 0 * * *"
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: write
@@ -42,99 +18,33 @@ permissions:
 jobs:
   dub:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Setup yt-dlp
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Setup YouTube cookies (bypass bot check)
+        uses: AnimMouse/setup-yt-dlp/cookies@v3
         with:
-          fetch-depth: 0
+          cookies: ${{ secrets.YOUTUBE_COOKIES }}
 
-      - name: Determine inputs
-        id: inputs
-        env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        run: |
-          URL="${{ inputs.youtube_url }}"
-          LANG="${{ inputs.target_language }}"
-          ENGINE="${{ inputs.engine }}"
-          PROJECT="${{ inputs.project_name }}"
-          GRAN="${{ inputs.granularity }}"
-          LIPSYNC="${{ inputs.lip_sync }}"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
-            if [[ "$COMMENT_BODY" =~ ^dub[[:space:]]+(.+)$ ]]; then
-              REST="${BASH_REMATCH[1]}"
-              URL=$(echo "$REST" | awk '{print $1}')
-              L2=$(echo "$REST" | awk '{print $2}')
-              LANG="${L2:-ar}"
-            fi
-          fi
-
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "lang=${LANG:-ar}" >> "$GITHUB_OUTPUT"
-          echo "engine=${ENGINE:-edge}" >> "$GITHUB_OUTPUT"
-          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "granularity=${GRAN:-word}" >> "$GITHUB_OUTPUT"
-          echo "lipsync=${LIPSYNC:-false}" >> "$GITHUB_OUTPUT"
-
-          if [ -z "$URL" ]; then
-            echo "::warning::No URL provided. Skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install system dependencies (ffmpeg)
-        if: steps.inputs.outputs.skip != 'true'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Set up Python
-        if: steps.inputs.outputs.skip != 'true'
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
-      - name: Install Python dependencies
-        if: steps.inputs.outputs.skip != 'true'
-        run: pip install -r requirements.txt faster-whisper
+      - run: pip install -r requirements.txt
 
-      - name: Run REAL dubbing pipeline (word-level timing)
-        if: steps.inputs.outputs.skip != 'true'
-        env:
-          DBYT_ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          DBYT_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python -m backend.cli "${{ steps.inputs.outputs.url }}" \
-            --target-language "${{ steps.inputs.outputs.lang }}" \
-            --engine "${{ steps.inputs.outputs.engine }}" \
-            --project-name "${{ steps.inputs.outputs.project }}" \
-            --granularity "${{ steps.inputs.outputs.granularity }}"
+      - run: python -m backend.cli "${{ inputs.youtube_url }}" --target-language "${{ inputs.target_language }}"
 
-      - name: Lip-sync the mouth (Wav2Lip, optional)
-        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.lipsync == 'true'
-        run: |
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install opencv-python numpy librosa
-          echo "::warning::Lip-sync on CPU is very slow for long videos."
-
-      - name: Persist output in the repository (GitHub = workspace)
-        if: steps.inputs.outputs.skip != 'true'
-        run: |
+      - run: |
           git config user.name "DBYT bot"
           git config user.email "actions@users.noreply.github.com"
-          git add workspace || true
-          if git diff --cached --quiet; then
-            echo "No new output to commit."
-          else
-            git commit -m "workspace: dubbed video (${{ steps.inputs.outputs.lang }})"
-            git push
-          fi
+          git add workspace && git commit -m "dubbed video" && git push
 
-      - name: Upload dubbed video artifact
-        if: steps.inputs.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: dubbed-video
           path: workspace/output/*
-          if-no-files-found: error
