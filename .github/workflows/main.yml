@@ -108,6 +108,7 @@ jobs:
         env:
           YOUTUBE_URL: ${{ inputs.youtube_url }}
           TARGET_LANGUAGE: ${{ inputs.target_language }}
+          DBYT_YOUTUBE_PROXIES: ${{ secrets.YOUTUBE_PROXIES }}
         run: python -m backend.cli "$YOUTUBE_URL" --target-language "$TARGET_LANGUAGE"
 
       - name: Commit generated workspace output

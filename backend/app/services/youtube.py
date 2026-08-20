@@ -62,6 +62,16 @@ _COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
 _WPC_BROWSER = os.environ.get("DBYT_WPC_BROWSER") or "/usr/bin/google-chrome"
 
 
+def _configured_proxies() -> tuple[str, ...]:
+    """Read optional proxies without requiring one for normal operation.
+
+    The value may be a single URL or a comma/newline-separated list. Proxy
+    values stay in memory and are never written to logs or generated files.
+    """
+    raw = os.environ.get("DBYT_YOUTUBE_PROXIES", "")
+    return tuple(value.strip() for value in re.split(r"[,\n]", raw) if value.strip())
+
+
 def _has_usable_cookies(path: str | os.PathLike[str]) -> bool:
     """Return true only when a Netscape cookie file contains cookie rows."""
     try:
@@ -125,7 +135,7 @@ def _try_extract(
     out_dir: Optional[Path] = None,
     prefer_audio: bool = True,
 ):
-    """Try yt-dlp across player clients; return ``(info, filename)``."""
+    """Try WPC-enabled yt-dlp across configured proxies and player clients."""
     import yt_dlp
 
     if download and out_dir is None:
@@ -134,59 +144,69 @@ def _try_extract(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     has_cookies = _has_usable_cookies(_COOKIES_PATH)
+    proxies = _configured_proxies()
+    attempts = (*proxies, None) if proxies else (None,)
     last_error: Optional[Exception] = None
 
-    for client in _PLAYER_CLIENTS:
-        extractor_args = {
-            "youtube": {"player_client": [client]},
-            "youtubepot-wpc": {"browser_path": _WPC_BROWSER},
-        }
-        options = {
-            "quiet": True,
-            "no_warnings": False,
-            "noplaylist": True,
-            "extractor_args": extractor_args,
-            "http_headers": {"User-Agent": _BROWSER_UA},
-            "js_runtimes": {"node": {}},
-            "retries": 3,
-            "fragment_retries": 3,
-            "file_access_retries": 3,
-            "extractor_retries": 3,
-        }
-        # The previous job proved the saved cookie secret is stale. Do not let
-        # an invalid authenticated session poison the browser/guest clients.
-        if has_cookies and client not in {"android_vr", "web_embedded", "tv_embedded"}:
-            options["cookiefile"] = _COOKIES_PATH
-        if download:
-            options["format"] = "bv*+ba/b"
-            options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
-            options["merge_output_format"] = "mp4"
-            if prefer_audio:
-                options["format"] = "ba/b"
-                options["postprocessors"] = [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "m4a",
-                    "preferredquality": "192",
-                }]
-        else:
-            options["skip_download"] = True
-            options["extract_flat"] = True
+    for proxy in attempts:
+        for client in _PLAYER_CLIENTS:
+            extractor_args = {
+                "youtube": {"player_client": [client]},
+                "youtubepot-wpc": {"browser_path": _WPC_BROWSER},
+            }
+            options = {
+                "quiet": True,
+                "no_warnings": False,
+                "noplaylist": True,
+                "extractor_args": extractor_args,
+                "http_headers": {"User-Agent": _BROWSER_UA},
+                "js_runtimes": {"node": {}},
+                "retries": 3,
+                "fragment_retries": 3,
+                "file_access_retries": 3,
+                "extractor_retries": 3,
+            }
+            if proxy:
+                options["proxy"] = proxy
+            # Do not pass an expired secret to embedded clients. Browser clients
+            # may still use it, but disable it for later attempts after auth errors.
+            if has_cookies and client not in {"android_vr", "web_embedded", "tv_embedded"}:
+                options["cookiefile"] = _COOKIES_PATH
+            if download:
+                options["format"] = "bv*+ba/b"
+                options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
+                options["merge_output_format"] = "mp4"
+                if prefer_audio:
+                    options["format"] = "ba/b"
+                    options["postprocessors"] = [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "m4a",
+                        "preferredquality": "192",
+                    }]
+            else:
+                options["skip_download"] = True
+                options["extract_flat"] = True
 
-        try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(url, download=download)
-                prepared_filename = ydl.prepare_filename(info) if download else None
-            return info, prepared_filename
-        except Exception as exc:  # noqa: BLE001 - try the next client
-            last_error = exc
-            message = str(exc)
-            print(f"[youtube] client={client} failed: {message[:240]}")
-            if has_cookies and any(
-                marker in message.lower()
-                for marker in ("cookies are no longer valid", "sign in to confirm", "cookies are invalid")
-            ):
-                has_cookies = False
-                print("[youtube] disabling stale cookie secret for remaining attempts")
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(url, download=download)
+                    prepared_filename = ydl.prepare_filename(info) if download else None
+                return info, prepared_filename
+            except Exception as exc:  # noqa: BLE001 - try the next route
+                last_error = exc
+                message = str(exc)
+                route = "configured proxy" if proxy else "direct"
+                print(f"[youtube] client={client} via={route} failed: {message[:240]}")
+                if has_cookies and any(
+                    marker in message.lower()
+                    for marker in (
+                        "cookies are no longer valid",
+                        "sign in to confirm",
+                        "cookies are invalid",
+                    )
+                ):
+                    has_cookies = False
+                    print("[youtube] disabling stale cookie secret for remaining attempts")
 
     if last_error is not None:
         raise last_error

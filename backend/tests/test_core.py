@@ -116,6 +116,25 @@ def test_downloaded_file_resolves_merged_mp4():
         assert resolved == merged
 
 
+def test_configured_proxies():
+    import os
+
+    previous = os.environ.get("DBYT_YOUTUBE_PROXIES")
+    try:
+        os.environ["DBYT_YOUTUBE_PROXIES"] = (
+            " socks5h://proxy-a:1080,\nhttp://proxy-b:8080 "
+        )
+        assert youtube._configured_proxies() == (
+            "socks5h://proxy-a:1080",
+            "http://proxy-b:8080",
+        )
+    finally:
+        if previous is None:
+            os.environ.pop("DBYT_YOUTUBE_PROXIES", None)
+        else:
+            os.environ["DBYT_YOUTUBE_PROXIES"] = previous
+
+
 if __name__ == "__main__":
     import traceback
 
