@@ -112,7 +112,9 @@ docker compose up --build
 3. أدخل رابط يوتيوب واللغة الهدف، ثم شغّل.
 4. حمّل النتيجة من **Artifacts** (`dubbed-video`).
 
-هذا المسار يعمل على runner مؤقت، وقد يحجب YouTube عنوان IP الخاص به. للتشغيل المستمر استخدم ملفات [`deploy/README.md`](deploy/README.md) و`deploy/docker-compose.prod.yml`.
+هذا المسار يعمل على runner مؤقت، وقد يحجب YouTube عنوان IP الخاص به. إذا كان تنزيل YouTube هو المشكلة، استخدم المسار الهجين الموثق في [`docs/COLAB_PIPELINE.md`](docs/COLAB_PIPELINE.md): ينزّل Colab الفيديو ثم يبدأ GitHub Actions المعالجة من ملف محلي.
+
+للتشغيل المستمر استخدم ملفات [`deploy/README.md`](deploy/README.md) و`deploy/docker-compose.prod.yml`.
 
 ### 4) الاستضافة الإنتاجية
 
