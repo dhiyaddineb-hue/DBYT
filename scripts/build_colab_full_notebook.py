@@ -108,13 +108,13 @@ print(f'✅ Settings loaded: {GITHUB_REPO} | engine={TTS_ENGINE} | target={TARGE
 
 code("""#@title 3) تنزيل الفيديو من YouTube داخل Colab
 source_path = WORK_DIR / 'source.mp4'
-formats = [
-    'bv*[height<=720]+ba/b[height<=720]/best',
-    'best[ext=mp4][height<=720]/best[height<=720]/best',
-    None,
+attempts = [
+    ('android_vr', 'bv*[height<=720]+ba/b[height<=720]/best'),
+    ('android_vr', None),
+    (None, None),
 ]
 last_error = ''
-for attempt, selected_format in enumerate(formats, start=1):
+for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
     for old in WORK_DIR.glob('source.*'):
         old.unlink(missing_ok=True)
     command = [
@@ -125,12 +125,14 @@ for attempt, selected_format in enumerate(formats, start=1):
         '--remote-components', 'ejs:github',
         '--merge-output-format', 'mp4',
     ]
+    if selected_client:
+        command += ['--extractor-args', f'youtube:player_client={selected_client}']
     if selected_format:
         command += ['--format', selected_format]
     command += [
         '--output', str(WORK_DIR / 'source.%(ext)s'), VIDEO_URL,
     ]
-    print(f'⬇️ Download attempt {attempt}/{len(formats)} with format: {selected_format}', flush=True)
+    print(f'⬇️ Download attempt {attempt}/{len(attempts)} with client={selected_client or "default"}, format={selected_format or "auto"}', flush=True)
     completed = subprocess.run(command, text=True, capture_output=True)
     if completed.returncode == 0:
         print(completed.stdout[-2000:], flush=True)
@@ -138,7 +140,7 @@ for attempt, selected_format in enumerate(formats, start=1):
     last_error = (completed.stderr or completed.stdout or 'unknown yt-dlp error')
     print(f'⚠️ Attempt {attempt} failed; yt-dlp said:\\n{last_error[-4000:]}', flush=True)
 else:
-    raise RuntimeError(f'yt-dlp failed for every format. Last error:\\n{last_error[-6000:]}')
+    raise RuntimeError(f'yt-dlp failed for every YouTube client/format attempt. Last error:\\n{last_error[-6000:]}')
 
 candidates = sorted(WORK_DIR.glob('source.*'))
 if not candidates:
