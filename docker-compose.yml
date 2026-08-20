@@ -1,0 +1,13 @@
+services:
+  dbyt:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./jobs:/app/jobs
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./data:/app/data
+    restart: unless-stopped

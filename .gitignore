@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data / artifacts (heavy files stay out of Git)
+jobs/
+data/
+uploads/
+output/
+*.mp4
+*.mp3
+*.wav
+*.m4a
+*.webm
+*.ogg
+*.flac
+!frontend/**/*.mp3
+
+# Models
+models/
+*.ggml
+*.bin
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+config.local.json
+secrets/
+*.pem
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
+nohup.out
+
+# Node
+node_modules/
+.next/
+dist/
+build/
