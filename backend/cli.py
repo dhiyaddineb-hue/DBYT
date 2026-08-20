@@ -12,18 +12,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import shutil
+import sys
 from pathlib import Path
 
-from .config import settings
-from .services import youtube
-from .services.pipeline import DubbingPipeline
+# Make the repo root importable regardless of how this file is invoked
+# (python -m backend.cli  OR  python backend/cli.py  OR  GitHub Actions).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from backend.app.config import settings
+from backend.app.services import youtube
+from backend.app.services.pipeline import DubbingPipeline
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="DBYT — professional video dubbing")
     p.add_argument("input", help="YouTube URL or local media file path")
     p.add_argument("--target-language", default="ar", help="Target language code")
-    p.add_argument("--engine", default="edge", choices=["edge", "elevenlabs", "bark", "xtts"])
+    p.add_argument("--engine", default="edge", choices=["edge", "elevenlabs", "bark", "xtts", "piper", "sherpa"])
     p.add_argument("--voice", default=None, help="Optional TTS voice override")
     p.add_argument("--project-name", default="", help="Project name (auto from title if empty)")
     p.add_argument("--keep-background", default="true", choices=["true", "false"])
