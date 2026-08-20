@@ -27,7 +27,7 @@
 
 افتح Notebook، شغّل الخلايا بالترتيب، وأدخل رابط YouTube واللغة واسم المستودع. الخلية الأولى تثبت ffmpeg وyt-dlp، والخلية الثالثة تنزّل الفيديو داخل Colab. الخلية الرابعة تنشئ Release مؤقتًا وترفع الفيديو، ثم الخلية الخامسة ترسل الحدث إلى GitHub.
 
-بعد ذلك افتح تبويب Actions وتابع **Process Colab upload**. Workflow يثبت ffmpeg وPython، ينزّل الـ asset الخاص عبر `GITHUB_TOKEN`، ويشغّل:
+بعد ذلك افتح تبويب Actions وتابع **Process Colab upload**. Workflow يثبت ffmpeg وPython وSherpa-ONNX، وينزّل الـ asset الخاص عبر `GITHUB_TOKEN`، ثم يستخدم TTS محليًا من نماذج GitHub Releases بدل Edge WebSocket، ويشغّل:
 
 ```bash
 python -m backend.cli workspace/incoming/source.mp4 \
@@ -40,6 +40,6 @@ python -m backend.cli workspace/incoming/source.mp4 \
 
 ## حدود هذا المسار
 
-هذا الحل لا يجعل GitHub يتصل بـ YouTube؛ GitHub يتعامل فقط مع ملف رفعه Colab. لذلك لا يحتاج Workflow إلى `YOUTUBE_COOKIES` أو Proxy لتنزيل المصدر. ما زالت خطوات Whisper والترجمة وTTS تحتاج شبكاتها الخاصة، وقد تحتاج `DBYT_OPENAI_API_KEY` أو إعدادات TTS إذا اخترت محركًا مدفوعًا.
+هذا الحل لا يجعل GitHub يتصل بـ YouTube؛ GitHub يتعامل فقط مع ملف رفعه Colab. لذلك لا يحتاج Workflow إلى `YOUTUBE_COOKIES` أو Proxy لتنزيل المصدر. Whisper يعمل محليًا، وTTS الافتراضي هو Sherpa-ONNX المحلي؛ أول تشغيل ينزّل نموذج الصوت العربي من GitHub Releases ثم يستخدمه محليًا. الترجمة الافتراضية قد تحاول Google، ويمكن تبديلها إلى backend محلي إذا كانت شبكة الترجمة محجوبة.
 
 استخدم Release asset بدل commit مباشر للفيديو؛ ذلك يتجنب وضع الفيديو الثنائي في Git history. لا ترفع cookies إلى Release أو إلى المستودع. احذف token فورًا إذا ظهر في سجل أو Notebook مشارك.

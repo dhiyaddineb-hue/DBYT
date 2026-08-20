@@ -264,27 +264,39 @@ class SherpaEngine:
         "de": "vits-piper-de_DE-thorsten-medium",
     }
 
-    def _model_dir(self, lang: str) -> str:
-        import sherpa_onnx
+    def _model_dir(self, lang: str) -> Path:
+        """Download and locate the official Sherpa/Piper model directory."""
+        import tarfile
+        import urllib.request
 
         model = self._MODELS.get(lang, self._MODELS["en"])
-        dest = settings.models_dir / "sherpa" / model
-        if not (dest / "model.onnx").exists() and not (dest / "model.int8.onnx").exists():
-            # sherpa_onnx has a helper to auto-download from GitHub releases
-            try:
-                dest.mkdir(parents=True, exist_ok=True)
-                import subprocess
+        root = settings.models_dir / "sherpa" / model
+        onnx_files = list(root.rglob("*.onnx")) if root.exists() else []
+        if onnx_files:
+            return onnx_files[0].parent
 
-                url = (
-                    f"https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-                    f"tts-models/{model}.tar.bz2"
-                )
-                archive = dest / f"{model}.tar.bz2"
-                subprocess.run(["curl", "-L", "-o", str(archive), url], check=True)
-                subprocess.run(["tar", "xjf", str(archive), "-C", str(dest)], check=True)
-            except Exception as exc:  # noqa: BLE001
-                raise RuntimeError(f"Failed to download sherpa model {model}: {exc}") from exc
-        return str(dest)
+        root.mkdir(parents=True, exist_ok=True)
+        archive = root / f"{model}.tar.bz2"
+        url = (
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+            f"tts-models/{model}.tar.bz2"
+        )
+        try:
+            urllib.request.urlretrieve(url, archive)
+            with tarfile.open(archive, "r:bz2") as bundle:
+                base = root.resolve()
+                for member in bundle.getmembers():
+                    target = (root / member.name).resolve()
+                    if target != base and base not in target.parents:
+                        raise RuntimeError("Sherpa model archive contains an unsafe path")
+                bundle.extractall(root)
+            archive.unlink(missing_ok=True)
+            onnx_files = list(root.rglob("*.onnx"))
+            if not onnx_files:
+                raise RuntimeError("Sherpa model archive contains no ONNX model")
+            return onnx_files[0].parent
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Failed to download sherpa model {model}: {exc}") from exc
 
     async def synthesize(
         self,
@@ -300,28 +312,46 @@ class SherpaEngine:
         import asyncio
 
         def _run():
-            import sherpa_onnx
             import wave
+            import sherpa_onnx
 
-            model_dir = voice or self._model_dir(lang)
+            model_dir = Path(voice) if voice else self._model_dir(lang)
+            model_files = list(model_dir.glob("*.onnx"))
+            if not model_files:
+                raise RuntimeError(f"Sherpa model file not found in {model_dir}")
+            tokens = model_dir / "tokens.txt"
+            data_dir = model_dir / "espeak-ng-data"
             tts_config = sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=model_dir,
-                        tokens=f"{model_dir}/tokens.txt",
-                        lexicon="",  # leave empty; espeak-ng data used internally
+                        model=str(model_files[0]),
+                        tokens=str(tokens),
+                        data_dir=str(data_dir) if data_dir.is_dir() else "",
                     ),
+                    provider="cpu",
+                    num_threads=2,
                 ),
-                rule_fsts=f"{model_dir}/date.fst,{model_dir}/number.fst",
+                max_num_sentences=1,
             )
+            if not tts_config.validate():
+                raise RuntimeError(f"Invalid Sherpa TTS configuration for {model_dir}")
             tts = sherpa_onnx.OfflineTts(tts_config)
-            audio = tts.generate(text, sid=0, speed=rate)
+            generation = sherpa_onnx.GenerationConfig()
+            generation.sid = 0
+            generation.speed = max(0.5, min(2.0, rate))
+            audio = tts.generate(text, generation)
+            if len(audio.samples) == 0:
+                raise RuntimeError("Sherpa TTS returned empty audio")
+            import numpy as np
+            samples = np.asarray(audio.samples, dtype=np.float32)
+            pcm = np.clip(samples, -1.0, 1.0)
+            pcm16 = (pcm * 32767.0).astype(np.int16)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with wave.open(str(out_path), "wb") as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)
                 wf.setframerate(audio.sample_rate)
-                wf.writeframes(audio.samples)
+                wf.writeframes(pcm16.tobytes())
 
         await asyncio.to_thread(_run)
         return out_path

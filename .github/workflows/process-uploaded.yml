@@ -84,12 +84,16 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
+      - name: Verify offline TTS
+        run: python -c "import sherpa_onnx; print('sherpa-onnx', sherpa_onnx.__file__)"
+
       - name: Run dubbing pipeline on local source
         run: |
           set -euo pipefail
           python -u -m backend.cli \
             workspace/incoming/source.mp4 \
             --target-language "$TARGET_LANGUAGE" \
+            --engine sherpa \
             --project-name "$PROJECT_NAME" \
             --output-dir workspace/output
 

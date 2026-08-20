@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     lip_sync: bool = False  # reanimate the mouth to match the new voice (Wav2Lip)
 
     # TTS
-    default_engine: str = "edge"  # edge | elevenlabs | bark | xtts
+    default_engine: str = "sherpa"  # sherpa (offline) | edge | elevenlabs | bark | xtts
     openai_api_key: str | None = None
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # default "Rachel" (can be changed)
