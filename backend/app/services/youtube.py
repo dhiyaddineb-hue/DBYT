@@ -7,8 +7,11 @@ fail before the actual download even starts.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -156,7 +159,7 @@ def _try_extract(
         # Embedded clients are intentionally tried without browser cookies.
         # This keeps an expired secret from turning a public video into a
         # sign-in failure; browser clients still receive the cookie when useful.
-        if has_cookies and client not in {"android_vr", "tv_embedded", "web_embedded"}:
+        if has_cookies and client not in {"tv_embedded", "web_embedded"}:
             options["cookiefile"] = _COOKIES_PATH
         if download:
             options["format"] = (
@@ -173,6 +176,9 @@ def _try_extract(
                 options["merge_output_format"] = "mp4"
         else:
             options["skip_download"] = True
+            # Metadata does not need a media format. Flat extraction prevents
+            # a missing player stream from becoming a false "invalid URL".
+            options["extract_flat"] = True
 
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
@@ -188,6 +194,31 @@ def _try_extract(
     raise RuntimeError("yt-dlp could not select a YouTube player client")
 
 
+def _fetch_oembed_metadata(url: str, video_id: str) -> Optional[dict]:
+    """Fetch public title/author metadata without requesting player streams."""
+    endpoint = "https://www.youtube.com/oembed?" + urllib.parse.urlencode({
+        "url": url,
+        "format": "json",
+    })
+    request = urllib.request.Request(endpoint, headers={"User-Agent": _BROWSER_UA})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            data = json.loads(response.read())
+    except Exception:
+        return None
+
+    title = data.get("title") or ""
+    return {
+        "valid": True,
+        "video_id": video_id,
+        "title": title,
+        "channel": data.get("author_name") or "",
+        "duration": None,
+        "thumbnail": data.get("thumbnail_url") or "",
+        "suggested_project_name": _slugify(title),
+    }
+
+
 def fetch_metadata(url: str) -> dict:
     """Return video metadata without selecting or downloading a media format."""
     video_id = extract_video_id(url)
@@ -197,6 +228,10 @@ def fetch_metadata(url: str) -> dict:
     try:
         info, _ = _try_extract(url, download=False, prefer_audio=False)
     except Exception as exc:
+        fallback = _fetch_oembed_metadata(url, video_id)
+        if fallback:
+            print(f"[youtube] player metadata unavailable ({str(exc)[:120]}); using oEmbed")
+            return fallback
         return {
             "valid": False,
             "video_id": video_id,
