@@ -36,14 +36,20 @@ def _slugify(title: str, max_len: int = 60) -> str:
     return slug[:max_len].strip("-") or "project"
 
 
-# Player clients to try in order. YouTube blocks datacenter IPs (e.g. GitHub
-# Actions) with "Sign in to confirm you're not a bot" on the `web` client;
-# other clients (android/tv/mweb/ios) often bypass that check.
 _PLAYER_CLIENTS = ["android", "tv", "mweb", "ios", "web"]
 
+# When browser cookies are present, the WEB client is the correct one
+# (browser cookies are meant for web requests). Try web FIRST.
+_PLAYER_CLIENTS_WITH_COOKIES = ["web", "android", "tv", "mweb", "ios"]
+
+# Real browser User-Agent — some player clients reject the default python UA.
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
 # Optional cookies file path (set via env DBYT_YOUTUBE_COOKIES or the standard
-# ~/.cache/yt-dlp/youtube/cookies.txt used by AnimMouse/setup-yt-dlp/cookies).
-# Cookies from a logged-in YouTube account bypass the datacenter bot-wall.
+# ~/.cache/yt-dlp/youtube/cookies.txt).
 _COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
     "~/.cache/yt-dlp/youtube/cookies.txt"
 )
@@ -53,19 +59,20 @@ def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefe
     """Try yt-dlp across several player clients; return (info, filename)."""
     import yt_dlp
 
+    has_cookies = os.path.exists(_COOKIES_PATH)
+    clients = _PLAYER_CLIENTS_WITH_COOKIES if has_cookies else _PLAYER_CLIENTS
+
     last_err = None
-    for client in _PLAYER_CLIENTS:
+    for client in clients:
         opts = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
-            # Always set a flexible format so we never hit
-            # "Requested format is not available" across player clients.
             "format": "bestaudio/best" if prefer_audio else "best",
             "extractor_args": {"youtube": {"player_client": [client]}},
+            "http_headers": {"User-Agent": _BROWSER_UA},
         }
-        # Use cookies if available (bypasses YouTube's datacenter bot-wall)
-        if os.path.exists(_COOKIES_PATH):
+        if has_cookies:
             opts["cookiefile"] = _COOKIES_PATH
         if download:
             opts["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
@@ -85,25 +92,21 @@ def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefe
                 info = ydl.extract_info(url, download=download)
             filename = ydl.prepare_filename(info) if download else None
             return info, filename
-        except Exception as exc:  # noqa: BLE001 — try next client
+        except Exception as exc:
             last_err = exc
             print(f"[youtube] client={client} failed: {str(exc)[:120]}")
     raise last_err
 
 
 def fetch_metadata(url: str) -> dict:
-    """Return video metadata without downloading the media.
-
-    Returns a dict with keys: valid, video_id, title, channel, duration,
-    thumbnail, suggested_project_name. Raises on network/availability errors.
-    """
+    """Return video metadata without downloading the media."""
     video_id = extract_video_id(url)
     if not video_id:
         return {"valid": False, "error": "Invalid YouTube URL"}
 
     try:
         info, _ = _try_extract(url, download=False)
-    except Exception as exc:  # noqa: BLE001 — surface a clean message
+    except Exception as exc:
         return {"valid": False, "video_id": video_id, "error": f"Could not fetch video: {exc}"}
 
     title = info.get("title") or ""
@@ -119,36 +122,23 @@ def fetch_metadata(url: str) -> dict:
 
 
 def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
-    """Download the best available audio (or video) for a YouTube URL.
-
-    Returns the path to the downloaded file (audio as .m4a by default).
-
-    Strategy (each stage falls through to the next on failure):
-      1. Invidious / Piped public instances — FREE, no login, and they proxy
-         YouTube from residential-ish IPs, bypassing the datacenter bot-wall.
-      2. yt-dlp across several player clients (android/tv/mweb/ios/web),
-         using cookies if a cookies file is present.
-    """
+    """Download the best available audio (or video) for a YouTube URL."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Try the free Invidious/Piped front-ends first (no login needed)
     try:
         filename = _download_via_frontend(url, out_dir, prefer_audio)
         print("[youtube] downloaded via Invidious/Piped front-end ✓")
         return Path(filename)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[youtube] front-ends failed ({str(exc)[:120]}); trying yt-dlp…")
 
-    # 2) Fall back to yt-dlp (with cookies if available)
     info, filename = _try_extract(url, download=True, out_dir=out_dir, prefer_audio=prefer_audio)
 
-    # After FFmpegExtractAudio the extension changes to m4a
     if prefer_audio and not Path(filename).exists():
         filename = str(Path(filename).with_suffix(".m4a"))
     return Path(filename)
 
 
-# Public Invidious/Piped instances (rotate; add more as needed).
 _INSTANCES = [
     "https://inv.nadeko.net",
     "https://invidious.f5.si",
@@ -171,13 +161,11 @@ def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
     last_err = None
     for base in _INSTANCES:
         try:
-            # Piped API: /streams/{id} returns a JSON of streams
             api = f"{base}/streams/{video_id}"
             req = urllib.request.Request(api, headers={"User-Agent": "DBYT/1.0"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 streams = json.loads(resp.read())
 
-            # Prefer audio-only, else video
             if prefer_audio:
                 audios = [s for s in streams.get("audioStreams", [])]
                 best = max(audios, key=lambda s: s.get("bitrate", 0))
@@ -196,6 +184,6 @@ def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
                         break
                     f.write(chunk)
             return str(dest)
-        except Exception as exc:  # noqa: BLE001 — try next instance
+        except Exception as exc:
             last_err = exc
     raise RuntimeError(f"All Invidious/Piped instances failed: {last_err}")
