@@ -41,14 +41,15 @@ def _slugify(title: str, max_len: int = 60) -> str:
     return slug[:max_len].strip("-") or "project"
 
 
-# Embedded clients often remain available when the browser client is challenged.
-# Keep resilient clients first so a stale cookie cannot block a public video.
+# Clients are ordered from browser-based clients that can obtain PO tokens
+# through WPC, to clients that may work without account cookies.
 _PLAYER_CLIENTS = [
-    "android_vr",
-    "tv_embedded",
-    "web",
-    "web_embedded",
+    "web_safari",
     "mweb",
+    "web",
+    "android_vr",
+    "web_embedded",
+    "tv_embedded",
     "ios",
 ]
 _BROWSER_UA = (
@@ -58,6 +59,7 @@ _BROWSER_UA = (
 _COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
     "~/.cache/yt-dlp/youtube/cookies.txt"
 )
+_WPC_BROWSER = os.environ.get("DBYT_WPC_BROWSER") or "/usr/bin/google-chrome"
 
 
 def _has_usable_cookies(path: str | os.PathLike[str]) -> bool:
@@ -135,27 +137,27 @@ def _try_extract(
     last_error: Optional[Exception] = None
 
     for client in _PLAYER_CLIENTS:
+        extractor_args = {
+            "youtube": {"player_client": [client]},
+            "youtubepot-wpc": {"browser_path": _WPC_BROWSER},
+        }
         options = {
             "quiet": True,
             "no_warnings": False,
             "noplaylist": True,
-            "extractor_args": {"youtube": {"player_client": [client]}},
+            "extractor_args": extractor_args,
             "http_headers": {"User-Agent": _BROWSER_UA},
-            # Node 22 is installed by CI and is the supported runtime for the
-            # current yt-dlp EJS solver. Explicitly enabling it avoids falling
-            # back to an unavailable Deno runtime on GitHub-hosted runners.
             "js_runtimes": {"node": {}},
             "retries": 3,
             "fragment_retries": 3,
             "file_access_retries": 3,
             "extractor_retries": 3,
         }
-        if has_cookies and client not in {"android_vr", "tv_embedded", "web_embedded"}:
+        # The previous job proved the saved cookie secret is stale. Do not let
+        # an invalid authenticated session poison the browser/guest clients.
+        if has_cookies and client not in {"android_vr", "web_embedded", "tv_embedded"}:
             options["cookiefile"] = _COOKIES_PATH
         if download:
-            # Prefer separate best video + audio streams and fall back to a
-            # combined stream when necessary. This is substantially more
-            # reliable than requesting only the legacy `b` format on YouTube.
             options["format"] = "bv*+ba/b"
             options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
             options["merge_output_format"] = "mp4"
@@ -177,7 +179,14 @@ def _try_extract(
             return info, prepared_filename
         except Exception as exc:  # noqa: BLE001 - try the next client
             last_error = exc
-            print(f"[youtube] client={client} failed: {str(exc)[:240]}")
+            message = str(exc)
+            print(f"[youtube] client={client} failed: {message[:240]}")
+            if has_cookies and any(
+                marker in message.lower()
+                for marker in ("cookies are no longer valid", "sign in to confirm", "cookies are invalid")
+            ):
+                has_cookies = False
+                print("[youtube] disabling stale cookie secret for remaining attempts")
 
     if last_error is not None:
         raise last_error
@@ -252,12 +261,10 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
     except Exception as exc:
         print(f"[youtube] yt-dlp failed ({str(exc)[:200]}); trying front-end fallback…")
 
-    if not prefer_audio:
-        raise RuntimeError(
-            "yt-dlp could not download the video; refusing a video-only front-end "
-            "fallback because dubbing requires the original audio"
-        )
-    return Path(_download_via_frontend(url, out_dir, prefer_audio=True))
+    # A front-end fallback is acceptable only when it can provide the complete
+    # source video. The helper below downloads both video and audio streams and
+    # muxes them with ffmpeg, preserving the original soundtrack for dubbing.
+    return Path(_download_via_frontend(url, out_dir))
 
 
 _INSTANCES = [
@@ -265,13 +272,13 @@ _INSTANCES = [
     "https://invidious.f5.si",
     "https://yewtu.be",
     "https://invidious.nerdvpn.de",
-    "https://pipedapi.kavin.rocks",
-    "https://api.piped.private.coffee",
 ]
 
 
-def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
-    """Download a single audio stream through an Invidious/Piped instance."""
+def _download_via_frontend(url: str, out_dir: Path) -> str:
+    """Download separate video/audio streams through an Invidious instance."""
+    import subprocess
+
     video_id = extract_video_id(url)
     if not video_id:
         raise RuntimeError(f"Invalid YouTube URL: {url}")
@@ -279,27 +286,59 @@ def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
     last_error: Optional[Exception] = None
     for base in _INSTANCES:
         try:
-            api = f"{base}/streams/{video_id}"
+            api = f"{base}/api/v1/videos/{video_id}"
             request = urllib.request.Request(api, headers={"User-Agent": "DBYT/1.0"})
             with urllib.request.urlopen(request, timeout=30) as response:
-                streams = json.loads(response.read())
+                data = json.loads(response.read())
 
-            audio_streams = streams.get("audioStreams", [])
-            if not audio_streams:
-                raise RuntimeError("front-end returned no audio streams")
-            best = max(audio_streams, key=lambda stream: stream.get("bitrate", 0))
-            file_url = best["url"]
-            ext = "m4a" if prefer_audio else "mp4"
-            destination = out_dir / f"{video_id}.{ext}"
-            request = urllib.request.Request(file_url, headers={"User-Agent": "DBYT/1.0"})
-            with urllib.request.urlopen(request, timeout=600) as response, destination.open("wb") as handle:
-                while chunk := response.read(1024 * 256):
-                    handle.write(chunk)
-            return str(destination)
+            video_streams = data.get("formatStreams", []) or data.get("videoStreams", [])
+            audio_streams = data.get("adaptiveFormats", []) or data.get("audioStreams", [])
+            if not video_streams or not audio_streams:
+                raise RuntimeError("front-end returned incomplete streams")
+
+            def bitrate(stream: dict) -> int:
+                try:
+                    return int(stream.get("bitrate") or stream.get("qualityLabel", "0p").rstrip("p") or 0)
+                except (TypeError, ValueError):
+                    return 0
+
+            video = max(
+                (s for s in video_streams if s.get("url") and (s.get("type", "").startswith("video/") or s.get("qualityLabel"))),
+                key=bitrate,
+            )
+            audio = max(
+                (s for s in audio_streams if s.get("url") and (s.get("type", "").startswith("audio/") or s.get("itag"))),
+                key=bitrate,
+            )
+
+            video_path = out_dir / f"{video_id}.video"
+            audio_path = out_dir / f"{video_id}.audio"
+            output_path = out_dir / f"{video_id}.mp4"
+
+            for stream, destination in ((video, video_path), (audio, audio_path)):
+                stream_request = urllib.request.Request(
+                    stream["url"], headers={"User-Agent": "DBYT/1.0"}
+                )
+                with urllib.request.urlopen(stream_request, timeout=900) as response, destination.open("wb") as handle:
+                    while chunk := response.read(1024 * 1024):
+                        handle.write(chunk)
+
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-loglevel", "error",
+                    "-i", str(video_path), "-i", str(audio_path),
+                    "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
+                    str(output_path),
+                ],
+                check=True,
+            )
+            video_path.unlink(missing_ok=True)
+            audio_path.unlink(missing_ok=True)
+            return str(output_path)
         except Exception as exc:  # noqa: BLE001 - try the next instance
             last_error = exc
 
-    raise RuntimeError(f"All Invidious/Piped instances failed: {last_error}")
+    raise RuntimeError(f"All Invidious instances failed: {last_error}")
 
 
 __all__ = [
