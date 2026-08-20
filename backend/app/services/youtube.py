@@ -35,27 +35,62 @@ def _slugify(title: str, max_len: int = 60) -> str:
     return slug[:max_len].strip("-") or "project"
 
 
+# Player clients to try in order. YouTube blocks datacenter IPs (e.g. GitHub
+# Actions) with "Sign in to confirm you're not a bot" on the `web` client;
+# other clients (android/tv/mweb/ios) often bypass that check.
+_PLAYER_CLIENTS = ["android", "tv", "mweb", "ios", "web"]
+
+
+def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefer_audio: bool = True):
+    """Try yt-dlp across several player clients; return (info, filename)."""
+    import yt_dlp
+
+    last_err = None
+    for client in _PLAYER_CLIENTS:
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "extractor_args": {"youtube": {"player_client": [client]}},
+        }
+        if download:
+            opts["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
+            if prefer_audio:
+                opts["format"] = "bestaudio/best"
+                opts["postprocessors"] = [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "m4a",
+                    "preferredquality": "192",
+                }]
+            else:
+                opts["format"] = "best[height<=1080]/best"
+                opts["merge_output_format"] = "mp4"
+        else:
+            opts["skip_download"] = True
+
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=download)
+            filename = ydl.prepare_filename(info) if download else None
+            return info, filename
+        except Exception as exc:  # noqa: BLE001 — try next client
+            last_err = exc
+            print(f"[youtube] client={client} failed: {str(exc)[:120]}")
+    raise last_err
+
+
 def fetch_metadata(url: str) -> dict:
     """Return video metadata without downloading the media.
 
     Returns a dict with keys: valid, video_id, title, channel, duration,
     thumbnail, suggested_project_name. Raises on network/availability errors.
     """
-    import yt_dlp
-
     video_id = extract_video_id(url)
     if not video_id:
         return {"valid": False, "error": "Invalid YouTube URL"}
 
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": True,
-    }
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        info, _ = _try_extract(url, download=False)
     except Exception as exc:  # noqa: BLE001 — surface a clean message
         return {"valid": False, "video_id": video_id, "error": f"Could not fetch video: {exc}"}
 
@@ -77,44 +112,16 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
     Returns the path to the downloaded file (audio as .m4a by default).
 
     Tries, in order:
-      1. yt-dlp directly (needs access to YouTube/Google)
+      1. yt-dlp across several player clients (android/tv/mweb/ios/web)
       2. Invidious / Piped public instances (alternative front-ends that proxy
          the video) — solves the "YouTube blocked" problem.
     """
-    import yt_dlp
-
     out_dir.mkdir(parents=True, exist_ok=True)
-    if prefer_audio:
-        opts = {
-            "format": "bestaudio/best",
-            "outtmpl": str(out_dir / "%(id)s.%(ext)s"),
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "m4a",
-                    "preferredquality": "192",
-                }
-            ],
-        }
-    else:
-        opts = {
-            "format": "best[height<=1080]/best",
-            "outtmpl": str(out_dir / "%(id)s.%(ext)s"),
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "merge_output_format": "mp4",
-        }
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+        info, filename = _try_extract(url, download=True, out_dir=out_dir, prefer_audio=prefer_audio)
     except Exception as exc:  # noqa: BLE001 — fall back to Invidious/Piped
-        print(f"[youtube] direct download failed ({exc}); trying Invidious/Piped…")
+        print(f"[youtube] all player clients failed ({exc}); trying Invidious/Piped…")
         filename = _download_via_frontend(url, out_dir, prefer_audio)
 
     # After FFmpegExtractAudio the extension changes to m4a
