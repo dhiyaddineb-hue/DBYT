@@ -55,6 +55,8 @@ def get_engine(name: Optional[str] = None):
         return XTTSEngine()
     if name == "piper":
         return PiperEngine()
+    if name == "sherpa":
+        return SherpaEngine()
     raise ValueError(f"Unknown TTS engine: {name}")
 
 
@@ -235,6 +237,91 @@ class PiperEngine:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with wave.open(str(out_path), "wb") as wf:
                 v.synthesize(text, wf)
+
+        await asyncio.to_thread(_run)
+        return out_path
+
+
+class SherpaEngine:
+    """sherpa-onnx VITS — high-quality multilingual neural TTS (incl. Arabic).
+
+    The BEST free Arabic quality path. Models are hosted on GitHub Releases
+    (not HuggingFace), so they download fine on GitHub Actions / any machine
+    with internet. The Arabic voice `vits-piper-ar_JO-kareem-medium` is a
+    neural Piper VITS model (~67 MB).
+
+    Install:  pip install sherpa-onnx
+    """
+
+    name = "sherpa"
+
+    # language -> model asset name on the `tts-models` GitHub release
+    _MODELS = {
+        "ar": "vits-piper-ar_JO-kareem-medium",
+        "en": "vits-piper-en_US-lessac-medium",
+        "fr": "vits-piper-fr_FR-siwis-medium",
+        "es": "vits-piper-es_ES-davefx-medium",
+        "de": "vits-piper-de_DE-thorsten-medium",
+    }
+
+    def _model_dir(self, lang: str) -> str:
+        import sherpa_onnx
+
+        model = self._MODELS.get(lang, self._MODELS["en"])
+        dest = settings.models_dir / "sherpa" / model
+        if not (dest / "model.onnx").exists() and not (dest / "model.int8.onnx").exists():
+            # sherpa_onnx has a helper to auto-download from GitHub releases
+            try:
+                dest.mkdir(parents=True, exist_ok=True)
+                import subprocess
+
+                url = (
+                    f"https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+                    f"tts-models/{model}.tar.bz2"
+                )
+                archive = dest / f"{model}.tar.bz2"
+                subprocess.run(["curl", "-L", "-o", str(archive), url], check=True)
+                subprocess.run(["tar", "xjf", str(archive), "-C", str(dest)], check=True)
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Failed to download sherpa model {model}: {exc}") from exc
+        return str(dest)
+
+    async def synthesize(
+        self,
+        text: str,
+        lang: str,
+        out_path: Path,
+        emotion: str = "neutral",
+        rate: float = 1.0,
+        pitch: float = 0,
+        volume: float = 0,
+        voice: Optional[str] = None,
+    ) -> Path:
+        import asyncio
+
+        def _run():
+            import sherpa_onnx
+            import wave
+
+            model_dir = voice or self._model_dir(lang)
+            tts_config = sherpa_onnx.OfflineTtsConfig(
+                model=sherpa_onnx.OfflineTtsModelConfig(
+                    vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                        model=model_dir,
+                        tokens=f"{model_dir}/tokens.txt",
+                        lexicon="",  # leave empty; espeak-ng data used internally
+                    ),
+                ),
+                rule_fsts=f"{model_dir}/date.fst,{model_dir}/number.fst",
+            )
+            tts = sherpa_onnx.OfflineTts(tts_config)
+            audio = tts.generate(text, sid=0, speed=rate)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(out_path), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(audio.sample_rate)
+                wf.writeframes(audio.samples)
 
         await asyncio.to_thread(_run)
         return out_path
