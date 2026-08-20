@@ -255,6 +255,11 @@ class SherpaEngine:
 
     name = "sherpa"
 
+    def __init__(self):
+        # Reusing the loaded ONNX session is essential for long videos: the
+        # pipeline synthesizes one unit at a time, often hundreds of units.
+        self._tts_cache = {}
+
     # language -> model asset name on the `tts-models` GitHub release
     _MODELS = {
         "ar": "vits-piper-ar_JO-kareem-medium",
@@ -319,23 +324,27 @@ class SherpaEngine:
             model_files = list(model_dir.glob("*.onnx"))
             if not model_files:
                 raise RuntimeError(f"Sherpa model file not found in {model_dir}")
-            tokens = model_dir / "tokens.txt"
-            data_dir = model_dir / "espeak-ng-data"
-            tts_config = sherpa_onnx.OfflineTtsConfig(
-                model=sherpa_onnx.OfflineTtsModelConfig(
-                    vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=str(model_files[0]),
-                        tokens=str(tokens),
-                        data_dir=str(data_dir) if data_dir.is_dir() else "",
+            cache_key = str(model_files[0].resolve())
+            tts = self._tts_cache.get(cache_key)
+            if tts is None:
+                tokens = model_dir / "tokens.txt"
+                data_dir = model_dir / "espeak-ng-data"
+                tts_config = sherpa_onnx.OfflineTtsConfig(
+                    model=sherpa_onnx.OfflineTtsModelConfig(
+                        vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                            model=cache_key,
+                            tokens=str(tokens),
+                            data_dir=str(data_dir) if data_dir.is_dir() else "",
+                        ),
+                        provider="cpu",
+                        num_threads=2,
                     ),
-                    provider="cpu",
-                    num_threads=2,
-                ),
-                max_num_sentences=1,
-            )
-            if not tts_config.validate():
-                raise RuntimeError(f"Invalid Sherpa TTS configuration for {model_dir}")
-            tts = sherpa_onnx.OfflineTts(tts_config)
+                    max_num_sentences=1,
+                )
+                if not tts_config.validate():
+                    raise RuntimeError(f"Invalid Sherpa TTS configuration for {model_dir}")
+                tts = sherpa_onnx.OfflineTts(tts_config)
+                self._tts_cache[cache_key] = tts
             generation = sherpa_onnx.GenerationConfig()
             generation.sid = 0
             generation.speed = max(0.5, min(2.0, rate))
