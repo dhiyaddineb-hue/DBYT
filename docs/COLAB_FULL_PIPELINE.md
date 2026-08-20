@@ -12,7 +12,7 @@ YouTube → yt-dlp داخل Colab → Whisper → ترجمة → Fasih-TTS-V1 �
 
 يحتاج التشغيل إلى جلسة Google Colab، ويفضل اختيار **GPU** من `Runtime → Change runtime type`. يستطيع المسار استخدام CPU، لكن نموذج Fasih وWhisper سيكونان أبطأ بكثير. النموذج الموصى به للعربية هو `NightPrince/Fasih-TTS-V1`، وهو صوت ذكوري احترافي للفصحى مبني على XTTS-v2. يختار الدفتر تلقائيًا مقطعًا صوتيًا قصيرًا من المصدر لاستعماله كمرجع للصوت.
 
-الخلية الأولى تثبت `yt-dlp[default]` و`yt-dlp-ejs` وتثبت **Deno** تلقائيًا. يحتاج yt-dlp الحديث إلى JavaScript runtime وEJS لحل تحديات YouTube؛ لذلك لا تتجاوز الخلية الأولى حتى تنجح رسالة إصدار Deno.
+الخلية الأولى تثبت `yt-dlp[default]` بإصدار مثبت و`yt-dlp-ejs` وتثبت **Deno** تلقائيًا داخل `/content/dbty/.deno` بطريقة غير تفاعلية، ثم تتحقق من وجود `ffmpeg` و`yt-dlp` وتطبع الإصدارين. يحتاج yt-dlp الحديث إلى JavaScript runtime وEJS لحل تحديات YouTube؛ لذلك لا تتجاوز الخلية الأولى حتى تظهر رسالتا الإصدار بنجاح.
 
 > **تنبيه الترخيص:** بطاقة Fasih-TTS-V1 تذكر أن النموذج موزع وفق Coqui Public Model License، مع استخدام غير تجاري وإسناد. لا تستخدمه تجاريًا قبل مراجعة الرخصة والشروط الحالية.
 
@@ -28,7 +28,7 @@ DBYT_COLAB_TOKEN
 
 ## التشغيل
 
-افتح [Notebook الدبلجة الكاملة](https://colab.research.google.com/github/dhiyaddineb-hue/DBYT/blob/main/notebooks/DBYT_colab_full_dubbing.ipynb)، ثم شغّل الخلايا بالترتيب. في خلية الإعدادات غيّر `VIDEO_URL` فقط، واختر `TTS_ENGINE = "fasih"` للعربية الفصحى. اختر `sherpa` إذا لم يتوفر GPU أو أردت مسارًا أخف يعمل محليًا. إذا فشلت الخلية 3، اطبع آخر جزء من `yt-dlp said:`؛ فالخلية تعرض سبب الخطأ الحقيقي وتجرب أولًا عميل `android_vr` بصيغتين، ثم المحاولة الافتراضية. إذا ظهرت رسائل `HTTP 429` أو `Sign in to confirm you're not a bot` في جميع المحاولات، فالمشكلة حجب/تحديد معدل من YouTube لشبكة Colab الحالية وليست خطأً في الدفتر؛ جرّب جلسة Colab جديدة لاحقًا أو شبكة مختلفة، ولا تكرر المحاولات بسرعة.
+افتح [Notebook الدبلجة الكاملة](https://colab.research.google.com/github/dhiyaddineb-hue/DBYT/blob/main/notebooks/DBYT_colab_full_dubbing.ipynb)، ثم شغّل الخلايا بالترتيب. في خلية الإعدادات غيّر `VIDEO_URL` فقط، واختر `TTS_ENGINE = "fasih"` للعربية الفصحى. اختر `sherpa` إذا لم يتوفر GPU أو أردت مسارًا أخف يعمل محليًا. إذا فشلت الخلية 3، اطبع آخر جزء من `yt-dlp said:`؛ فالخلية تعرض سبب الخطأ الحقيقي وتجرب أولًا عميل `android_vr` بصيغتين، ثم المحاولة الافتراضية. إذا ظهرت رسائل `HTTP 429` أو `Sign in to confirm you're not a bot` في جميع المحاولات، فالمشكلة حجب/تحديد معدل من YouTube لشبكة Colab الحالية وليست خطأً في الدفتر؛ جرّب جلسة Colab جديدة لاحقًا أو شبكة مختلفة، ولا تكرر المحاولات بسرعة. أما رسائل `Deno installation failed` أو `ffmpeg or yt-dlp is not available` فهي مشكلة تهيئة، وقد أصبحت الخلية تعرض المسار المتوقع والإصدارات لتحديدها مباشرة.
 
 يُفضّل استخدام `GRANULARITY = "segment"` للفيديوهات الطويلة؛ فهو أسرع من توليد صوت لكل كلمة، مع بقاء المحاذاة على مستوى الجملة. يمكن اختيار `word` عندما تكون دقة التوقيت أهم من سرعة التنفيذ.
 

@@ -44,9 +44,10 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 code("""#@title 1) تثبيت الأدوات الأساسية
 !sudo apt-get update -qq
 !sudo apt-get install -y -qq ffmpeg
-!pip -q install -U "yt-dlp[default]" yt-dlp-ejs requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
+!pip -q install -U "yt-dlp[default]==2026.8.19" yt-dlp-ejs requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
 
 from pathlib import Path
+import importlib.metadata
 import json, os, re, shutil, subprocess, sys, uuid
 from urllib.parse import quote
 import requests
@@ -56,16 +57,30 @@ WORK_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault('HF_HOME', str(WORK_DIR / 'models' / 'huggingface'))
 os.environ.setdefault('TTS_HOME', str(WORK_DIR / 'models' / 'tts'))
 
-# yt-dlp now needs a real JavaScript runtime for YouTube. Install the
-# recommended Deno runtime once per Colab session and expose its exact path.
-deno_path = Path('/root/.deno/bin/deno')
-if not deno_path.exists():
-    subprocess.run(['bash', '-lc', 'curl -fsSL https://deno.land/install.sh | sh'], check=True)
-if not deno_path.exists():
-    raise RuntimeError('Deno installation failed; yt-dlp cannot solve YouTube JavaScript challenges.')
+# yt-dlp now needs a real JavaScript runtime for YouTube. Install Deno in
+# the project directory instead of assuming that Colab runs as root.
+deno_root = WORK_DIR / '.deno'
+deno_path = deno_root / 'bin' / 'deno'
+os.environ['DENO_INSTALL'] = str(deno_root)
+os.environ['DENO_DIR'] = str(WORK_DIR / 'models' / 'deno')
+if not (deno_path.is_file() and os.access(deno_path, os.X_OK)):
+    install_env = os.environ.copy()
+    # The current Deno installer asks interactive shell/completion questions
+    # when stdout is a terminal. Colab must never block on those prompts.
+    install_env['CI'] = '1'
+    subprocess.run(
+        ['bash', '-lc', 'curl -fsSL https://deno.land/install.sh | sh'],
+        env=install_env,
+        check=True,
+    )
+if not (deno_path.is_file() and os.access(deno_path, os.X_OK)):
+    raise RuntimeError(f'Deno installation failed; expected executable: {deno_path}')
 os.environ['PATH'] = f'{deno_path.parent}:{os.environ.get("PATH", "")}'
 subprocess.run([str(deno_path), '--version'], check=True)
+if shutil.which('ffmpeg') is None or shutil.which('yt-dlp') is None:
+    raise RuntimeError('ffmpeg or yt-dlp is not available on PATH after installation.')
 print('✅ Base Colab environment ready:', WORK_DIR)
+print('✅ yt-dlp:', importlib.metadata.version('yt-dlp'), '| Deno:', deno_path)
 """)
 
 code("""#@title 2) الإعدادات والأسرار
