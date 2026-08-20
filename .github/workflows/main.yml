@@ -68,7 +68,6 @@ jobs:
           node --version
           ffmpeg -version | head -n 1
           python -c "import yt_dlp; print('yt-dlp', yt_dlp.version.__version__)"
-          python -c "import bgutil_ytdlp_pot_provider; print('bgutil plugin: OK')"
 
       - name: Start YouTube PO-token provider
         run: |
