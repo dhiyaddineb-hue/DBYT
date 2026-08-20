@@ -41,13 +41,13 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 شغّل الخلايا بالترتيب. خزّن مفتاح GitHub في Colab Secret باسم `DBYT_COLAB_TOKEN` ولا تكتبه داخل أي خلية.
 """)
 
-code("""#@title 1) تثبيت أدوات Colab
+code("""#@title 1) تثبيت الأدوات الأساسية
 !sudo apt-get update -qq
 !sudo apt-get install -y -qq ffmpeg
-!pip -q install -U "yt-dlp[default]" requests faster-whisper deep-translator soundfile huggingface_hub "coqui-tts==0.27.5"
+!pip -q install -U "yt-dlp[default]" requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
 
 from pathlib import Path
-import asyncio, json, os, re, shutil, subprocess, sys, uuid
+import json, os, re, shutil, subprocess, sys, uuid
 from urllib.parse import quote
 import requests
 
@@ -55,7 +55,7 @@ WORK_DIR = Path('/content/dbty')
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault('HF_HOME', str(WORK_DIR / 'models' / 'huggingface'))
 os.environ.setdefault('TTS_HOME', str(WORK_DIR / 'models' / 'tts'))
-print('✅ Colab environment ready:', WORK_DIR)
+print('✅ Base Colab environment ready:', WORK_DIR)
 """)
 
 code("""#@title 2) الإعدادات والأسرار
@@ -82,6 +82,17 @@ if not re.match(r'https://(www\\.)?youtube\\.com/|https://youtu\\.be/', VIDEO_UR
 if TTS_ENGINE == 'fasih' and TARGET_LANGUAGE != 'ar':
     raise ValueError('Fasih-TTS-V1 مخصص للعربية الفصحى؛ اختر ar أو استخدم Sherpa.')
 
+# Install only the selected TTS backend. This avoids unnecessary dependency
+# conflicts and makes the notebook safe to rerun after changing the engine.
+tts_package = 'coqui-tts==0.27.5' if TTS_ENGINE == 'fasih' else 'sherpa-onnx==1.13.6'
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', tts_package], check=True)
+try:
+    import torch
+    has_gpu = bool(torch.cuda.is_available())
+except Exception:
+    has_gpu = False
+if TTS_ENGINE == 'fasih' and not has_gpu:
+    print('⚠️ No GPU detected. Fasih will run on CPU and may be slow; switch TTS_ENGINE to sherpa for a lighter run.')
 print(f'✅ Settings loaded: {GITHUB_REPO} | engine={TTS_ENGINE} | target={TARGET_LANGUAGE} | granularity={GRANULARITY}')
 """)
 
@@ -130,6 +141,8 @@ print('✅ Source ready:', source_path, '\\n', probe)
 """)
 
 code("""#@title 4) استخراج مقطع صوت مرجعي للصوت العربي
+if 'source_path' not in globals() or not Path(source_path).exists():
+    raise RuntimeError('شغّل الخلية 3 بنجاح أولًا؛ source_path غير موجود.')
 reference_path = WORK_DIR / 'reference.wav'
 duration = float(subprocess.check_output([
     'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -147,6 +160,8 @@ print(f'✅ Reference audio: {reference_path} ({length:.1f}s)')
 """)
 
 code("""#@title 5) جلب كود DBYT الخاص عبر GitHub API
+if not GITHUB_TOKEN:
+    raise RuntimeError('GITHUB_TOKEN غير موجود؛ تحقق من Colab Secret DBYT_COLAB_TOKEN.')
 import io, tarfile
 
 API_ROOT = f'https://api.github.com/repos/{GITHUB_REPO}'
@@ -179,6 +194,10 @@ print('✅ DBYT source loaded:', REPO_DIR)
 """)
 
 code("""#@title 6) تشغيل خط الدبلجة كاملًا داخل Colab
+if 'source_path' not in globals() or not Path(source_path).exists():
+    raise RuntimeError('ملف المصدر غير موجود؛ شغّل الخلية 3 أولًا.')
+if TTS_ENGINE == 'fasih' and ('reference_path' not in globals() or not Path(reference_path).exists()):
+    raise RuntimeError('المقطع المرجعي غير موجود؛ شغّل الخلية 4 أولًا.')
 from backend.app.services.pipeline import DubbingPipeline
 
 work_dir = WORK_DIR / 'pipeline'
@@ -198,7 +217,7 @@ pipeline = DubbingPipeline(
     progress=progress,
 )
 
-final_path = asyncio.run(pipeline.run(source_path, work_dir))
+final_path = await pipeline.run(source_path, work_dir)
 project = PROJECT_NAME.strip() or f'dbyt-{uuid.uuid4().hex[:10]}'
 output_path = WORK_DIR / f'{project}{final_path.suffix}'
 shutil.copy2(final_path, output_path)
@@ -206,6 +225,8 @@ print('✅ Dubbed output:', output_path)
 """)
 
 code("""#@title 7) فحص النتيجة وتشغيل المعاينة
+if 'output_path' not in globals() or not Path(output_path).exists():
+    raise RuntimeError('الناتج غير موجود؛ شغّل الخلية 6 بنجاح أولًا.')
 probe = subprocess.check_output([
     'ffprobe', '-v', 'error', '-show_entries', 'format=duration,size',
     '-of', 'default=noprint_wrappers=1', str(output_path)
@@ -216,6 +237,8 @@ display(Video(str(output_path), embed=True))
 """)
 
 code("""#@title 8) رفع المصدر والنتيجة والسجل إلى GitHub Releases
+if 'output_path' not in globals() or not Path(output_path).exists():
+    raise RuntimeError('الناتج غير موجود؛ شغّل الخلية 6 بنجاح أولًا.')
 API_ROOT = f'https://api.github.com/repos/{GITHUB_REPO}'
 HEADERS = {
     'Authorization': f'Bearer {GITHUB_TOKEN}',
