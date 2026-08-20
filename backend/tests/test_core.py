@@ -216,6 +216,28 @@ def test_cobalt_audio_tunnel_payload():
     download_url.assert_called_once()
 
 
+def test_api_key_guard():
+    import os
+    from fastapi.testclient import TestClient
+
+    previous = os.environ.get("DBYT_API_KEY")
+    os.environ["DBYT_API_KEY"] = "test-api-key"
+    try:
+        from app.main import app
+
+        client = TestClient(app)
+        assert client.get("/api/health").status_code == 200
+        assert client.post("/api/upload").status_code == 401
+        assert client.post(
+            "/api/upload", headers={"X-API-Key": "test-api-key"}
+        ).status_code == 422
+    finally:
+        if previous is None:
+            os.environ.pop("DBYT_API_KEY", None)
+        else:
+            os.environ["DBYT_API_KEY"] = previous
+
+
 if __name__ == "__main__":
     import traceback
 

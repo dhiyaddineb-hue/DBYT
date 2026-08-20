@@ -22,9 +22,9 @@ concurrency:
 
 env:
   DBYT_WPC_BROWSER: /usr/bin/google-chrome
-  DBYT_COBALT_BROWSER: "1"
-  DBYT_COBALT_URL: https://cobalt.tools/
-  DBYT_DOWNLOADER_TIMEOUT: "60"
+  # Disabled by default: public browser downloader sites are slow and untrusted.
+  # Enable explicitly only after configuring DBYT_DOWNLOADER_SITES or an authorized route.
+  DBYT_COBALT_BROWSER: "0"
 
 jobs:
   dub:

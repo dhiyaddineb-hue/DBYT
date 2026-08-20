@@ -1,0 +1,9 @@
+{
+    # Leave blank to let Caddy use its default certificate issuer.
+    email {$TLS_EMAIL}
+}
+
+{$DBYT_DOMAIN} {
+    encode gzip zstd
+    reverse_proxy dbyt:8000
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=DBYT production Compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dbyt
+RemainAfterExit=yes
+ExecStart=/usr/bin/docker compose -f /opt/dbyt/deploy/docker-compose.prod.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/dbyt/deploy/docker-compose.prod.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

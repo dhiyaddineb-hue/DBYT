@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
 
 def _download_source(url: str, out_dir: Path) -> Path:
     """Use the browser/site downloader first; yt-dlp is the last fallback."""
-    use_browser = os.environ.get("DBYT_COBALT_BROWSER", "1").strip().lower() not in {
+    use_browser = os.environ.get("DBYT_COBALT_BROWSER", "0").strip().lower() not in {
         "0", "false", "no", "off"
     }
     if use_browser:

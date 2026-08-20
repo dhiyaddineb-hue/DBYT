@@ -53,16 +53,18 @@ DBYT/
 │   │       ├── audio.py         #   تمديد الزمن + دمج (ffmpeg)
 │   │       ├── pipeline.py      #   منسق الخطوات
 │   │       └── jobs.py          #   إدارة المهام (خلفية + متابعة الحالة)
-│   └── cli.py                   # واجهة سطر أوامر (تُستخدم في GitHub Actions)
+│   └── cli.py                   # واجهة سطر أوامر (تُستخدم في Actions والإنتاج)
 ├── frontend/                    # واجهة الويب (RTL عربية، بدون خطوة بناء)
-├── .github/workflows/dub.yml    # تشغيل الدوبلاج على GitHub Actions
+├── deploy/                      # Compose الإنتاج، Caddy، systemd، ونشر SSH
+├── .github/workflows/main.yml   # تشغيل مؤقت للدوبلاج على GitHub Actions
+├── .github/workflows/deploy.yml # نشر تلقائي إلى الخادم الإنتاجي
 ├── Dockerfile / docker-compose.yml
 └── requirements.txt
 ```
 
 ### كيف يعمل الدوبلاج (خطوة بخطوة)
 
-1. **التحميل** — `yt-dlp` يحمّل الفيديو/الصوت ويجلب العنوان (لتعبئة اسم المشروع).
+1. **التحميل** — يستخدم DBYT مسارًا مصرحًا به مثل `yt-dlp` مع Proxy أو Cobalt API؛ browser downloader العام اختياري وليس مسارًا مضمونًا.
 2. **النسخ** — `faster-whisper` يستخرج الكلام مع **توقيت كل كلمة**.
 3. **الترجمة** — `deep-translator` (أو OpenAI) يترجم كل جملة للغة الهدف.
 4. **الانفعال** — `emotion.py` يكتشف شعور كل جملة ويحوّله لمعاملات نبرة
@@ -103,12 +105,18 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 docker compose up --build
 ```
 
-### 3) التشغيل عبر GitHub Actions (بدون جهاز قوي)
+### 3) التشغيل عبر GitHub Actions (مؤقت)
 
 1. اذهب إلى تبويب **Actions** في المستودع.
 2. اختر **Dubbing Pipeline** ثم **Run workflow**.
-3. أدخل رابط يوتيوب واللغة الهدف والمحرك، ثم شغّل.
+3. أدخل رابط يوتيوب واللغة الهدف، ثم شغّل.
 4. حمّل النتيجة من **Artifacts** (`dubbed-video`).
+
+هذا المسار يعمل على runner مؤقت، وقد يحجب YouTube عنوان IP الخاص به. للتشغيل المستمر استخدم ملفات [`deploy/README.md`](deploy/README.md) و`deploy/docker-compose.prod.yml`.
+
+### 4) الاستضافة الإنتاجية
+
+يحتوي المستودع الآن على حزمة نشر كاملة: حاوية DBYT غير root، Caddy لـ reverse proxy وHTTPS، volumes دائمة، healthchecks، systemd، وWorkflow نشر عبر SSH. شغّلها من [`deploy/README.md`](deploy/README.md). يجب تعريف `DBYT_API_KEY` على الخادم قبل فتح الخدمة للعامة، وعدم وضع cookies أو مفاتيح API داخل المستودع.
 
 ---
 
