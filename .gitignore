@@ -2,7 +2,8 @@
 # DBYT — the repository IS the workspace.
 #
 # Produced files (models, uploads, jobs, output) live in `workspace/` and
-# ARE tracked in Git (via Git LFS — see .gitattributes). Do NOT ignore them.
+# are tracked when they are part of a dubbing job (via Git LFS where applicable).
+# Ephemeral offline-demo media is excluded by the rules at the end of this file.
 # =====================================================================
 
 # Python
@@ -40,3 +41,9 @@ node_modules/
 .next/
 dist/
 build/
+
+# Offline demo media is generated on demand and should not be committed.
+workspace/demo/*
+!workspace/demo/.gitkeep
+workspace/output/samples/*
+!workspace/output/samples/.gitkeep

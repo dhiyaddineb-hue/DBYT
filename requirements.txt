@@ -7,7 +7,7 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 
 # YouTube download & metadata
-yt-dlp==2024.7.9
+yt-dlp[default]==2026.8.19
 
 # Speech-to-text (Whisper) — CPU friendly via CTranslate2
 faster-whisper==1.0.3

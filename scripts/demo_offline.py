@@ -19,6 +19,7 @@ the original words, with the original background music ducked underneath.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,7 +33,17 @@ WORK = Path(__file__).resolve().parent.parent / "workspace" / "demo"
 
 
 def ffmpeg() -> str:
-    import imageio_ffmpeg
+    """Return ffmpeg from the system, with an optional Python fallback."""
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
+    try:
+        import imageio_ffmpeg
+    except ImportError as exc:
+        raise RuntimeError(
+            "ffmpeg is required for the offline demo; install it with apt or "
+            "install imageio-ffmpeg"
+        ) from exc
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 

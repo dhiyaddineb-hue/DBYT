@@ -86,6 +86,36 @@ def test_map_target_words_empty():
     assert _map_target_words(["x"], 0) == ["x"]
 
 
+def test_cookie_file_validation():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "cookies.txt"
+        path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+        assert not youtube._has_usable_cookies(path)
+        path.write_text(
+            "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\ttest\n",
+            encoding="utf-8",
+        )
+        assert youtube._has_usable_cookies(path)
+
+
+def test_downloaded_file_resolves_merged_mp4():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        merged = out_dir / "abc12345678.mp4"
+        merged.write_bytes(b"video")
+        resolved = youtube._downloaded_file(
+            {"id": "abc12345678"},
+            str(out_dir / "abc12345678.webm"),
+            out_dir,
+            prefer_audio=False,
+        )
+        assert resolved == merged
+
+
 if __name__ == "__main__":
     import traceback
 

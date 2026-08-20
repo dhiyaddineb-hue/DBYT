@@ -1,7 +1,9 @@
-"""YouTube helpers: URL validation, metadata fetching and media download.
+"""YouTube metadata and media download helpers.
 
-Uses `yt-dlp` under the hood. These functions are shared by the API
-(auto-fill project name, green-link validation) and the dubbing pipeline.
+The implementation intentionally keeps metadata extraction separate from format
+selection. YouTube frequently changes which streams are exposed to each player
+client; asking for a media format while only requesting metadata can therefore
+fail before the actual download even starts.
 """
 from __future__ import annotations
 
@@ -16,11 +18,11 @@ _YT_ID_RE = re.compile(
 
 
 def extract_video_id(url: str) -> Optional[str]:
-    """Extract the 11-char YouTube video id from any common URL shape."""
+    """Extract the 11-character YouTube video id from common URL shapes."""
     if not url:
         return None
-    m = _YT_ID_RE.search(url.strip())
-    return m.group(1) if m else None
+    match = _YT_ID_RE.search(url.strip())
+    return match.group(1) if match else None
 
 
 def is_valid_youtube_url(url: str) -> bool:
@@ -36,78 +38,157 @@ def _slugify(title: str, max_len: int = 60) -> str:
     return slug[:max_len].strip("-") or "project"
 
 
-_PLAYER_CLIENTS = ["android", "tv", "mweb", "ios", "web"]
-
-# When browser cookies are present, the WEB client is the correct one
-# (browser cookies are meant for web requests). Try web FIRST.
-_PLAYER_CLIENTS_WITH_COOKIES = ["web", "android", "tv", "mweb", "ios"]
-
-# Real browser User-Agent — some player clients reject the default python UA.
+_PLAYER_CLIENTS = ["web", "android", "tv", "mweb", "ios"]
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
-
-# Optional cookies file path (set via env DBYT_YOUTUBE_COOKIES or the standard
-# ~/.cache/yt-dlp/youtube/cookies.txt).
 _COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
     "~/.cache/yt-dlp/youtube/cookies.txt"
 )
 
 
-def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefer_audio: bool = True):
-    """Try yt-dlp across several player clients; return (info, filename)."""
+def _has_usable_cookies(path: str | os.PathLike[str]) -> bool:
+    """Return true only when a Netscape cookie file contains cookie rows.
+
+    GitHub Actions creates the file from a secret. If the secret is missing or
+    empty, treating the header-only file as authenticated makes yt-dlp choose a
+    less reliable client order and produces confusing diagnostics.
+    """
+    try:
+        cookie_path = Path(path)
+        if not cookie_path.is_file() or cookie_path.stat().st_size == 0:
+            return False
+        with cookie_path.open("r", encoding="utf-8", errors="replace") as handle:
+            return any(
+                line.strip() and not line.lstrip().startswith("#")
+                for line in handle
+            )
+    except OSError:
+        return False
+
+
+def _downloaded_file(
+    info: dict,
+    prepared_filename: Optional[str],
+    out_dir: Path,
+    prefer_audio: bool,
+) -> Path:
+    """Resolve the file created after yt-dlp post-processing/merging."""
+    candidates: list[Path] = []
+    if prepared_filename:
+        prepared = Path(prepared_filename)
+        candidates.extend(
+            [prepared, prepared.with_suffix(".mp4"), prepared.with_suffix(".m4a")]
+        )
+
+    video_id = info.get("id") or ""
+    if video_id:
+        suffixes = (".m4a", ".mp3", ".webm", ".opus", ".wav") if prefer_audio else (
+            ".mp4", ".mkv", ".webm", ".mov", ".avi"
+        )
+        candidates.extend(out_dir / f"{video_id}{suffix}" for suffix in suffixes)
+
+    for candidate in candidates:
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+
+    # This also handles an unusual container extension selected by a future
+    # yt-dlp release while avoiding .part and temporary files.
+    if video_id:
+        discovered = sorted(
+            (
+                path
+                for path in out_dir.glob(f"{video_id}.*")
+                if path.is_file() and path.stat().st_size > 0 and path.suffix != ".part"
+            ),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        if discovered:
+            return discovered[0]
+
+    expected = prepared_filename or str(out_dir / f"{video_id or 'download'}.media")
+    raise FileNotFoundError(f"yt-dlp completed but output file was not found: {expected}")
+
+
+def _try_extract(
+    url: str,
+    download: bool,
+    out_dir: Optional[Path] = None,
+    prefer_audio: bool = True,
+):
+    """Try yt-dlp across player clients; return ``(info, filename)``.
+
+    For metadata requests no format selector is supplied. This is important:
+    selecting ``bestaudio`` during metadata-only extraction can fail when a
+    player client exposes metadata but not that particular stream.
+    """
     import yt_dlp
 
-    has_cookies = os.path.exists(_COOKIES_PATH)
-    clients = _PLAYER_CLIENTS_WITH_COOKIES if has_cookies else _PLAYER_CLIENTS
+    if download and out_dir is None:
+        raise ValueError("out_dir is required when download=True")
+    if download:
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-    last_err = None
+    has_cookies = _has_usable_cookies(_COOKIES_PATH)
+    clients = _PLAYER_CLIENTS if has_cookies else ["android", "tv", "mweb", "ios", "web"]
+    last_error: Optional[Exception] = None
+
     for client in clients:
-        opts = {
+        options = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
-            "format": "bestaudio/best" if prefer_audio else "best",
             "extractor_args": {"youtube": {"player_client": [client]}},
             "http_headers": {"User-Agent": _BROWSER_UA},
         }
         if has_cookies:
-            opts["cookiefile"] = _COOKIES_PATH
+            options["cookiefile"] = _COOKIES_PATH
         if download:
-            opts["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
+            options["format"] = (
+                "ba/b" if prefer_audio else "bv*[height<=1080]+ba/b[height<=1080]/b"
+            )
+            options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
             if prefer_audio:
-                opts["postprocessors"] = [{
+                options["postprocessors"] = [{
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "m4a",
                     "preferredquality": "192",
                 }]
             else:
-                opts["merge_output_format"] = "mp4"
+                options["merge_output_format"] = "mp4"
         else:
-            opts["skip_download"] = True
+            options["skip_download"] = True
 
         try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=download)
-            filename = ydl.prepare_filename(info) if download else None
-            return info, filename
-        except Exception as exc:
-            last_err = exc
-            print(f"[youtube] client={client} failed: {str(exc)[:120]}")
-    raise last_err
+                prepared_filename = ydl.prepare_filename(info) if download else None
+            return info, prepared_filename
+        except Exception as exc:  # noqa: BLE001 - try the next client
+            last_error = exc
+            print(f"[youtube] client={client} failed: {str(exc)[:160]}")
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("yt-dlp could not select a YouTube player client")
 
 
 def fetch_metadata(url: str) -> dict:
-    """Return video metadata without downloading the media."""
+    """Return video metadata without selecting or downloading a media format."""
     video_id = extract_video_id(url)
     if not video_id:
         return {"valid": False, "error": "Invalid YouTube URL"}
 
     try:
-        info, _ = _try_extract(url, download=False)
+        info, _ = _try_extract(url, download=False, prefer_audio=False)
     except Exception as exc:
-        return {"valid": False, "video_id": video_id, "error": f"Could not fetch video: {exc}"}
+        return {
+            "valid": False,
+            "video_id": video_id,
+            "error": f"Could not fetch video: {exc}",
+        }
 
     title = info.get("title") or ""
     return {
@@ -122,21 +203,26 @@ def fetch_metadata(url: str) -> dict:
 
 
 def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
-    """Download the best available audio (or video) for a YouTube URL."""
+    """Download media with yt-dlp and return the actual postprocessed file."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        filename = _download_via_frontend(url, out_dir, prefer_audio)
-        print("[youtube] downloaded via Invidious/Piped front-end ✓")
-        return Path(filename)
+        info, prepared_filename = _try_extract(
+            url, download=True, out_dir=out_dir, prefer_audio=prefer_audio
+        )
+        return _downloaded_file(info, prepared_filename, out_dir, prefer_audio)
     except Exception as exc:
-        print(f"[youtube] front-ends failed ({str(exc)[:120]}); trying yt-dlp…")
+        print(f"[youtube] yt-dlp failed ({str(exc)[:160]}); trying front-end fallback…")
 
-    info, filename = _try_extract(url, download=True, out_dir=out_dir, prefer_audio=prefer_audio)
-
-    if prefer_audio and not Path(filename).exists():
-        filename = str(Path(filename).with_suffix(".m4a"))
-    return Path(filename)
+    # Front-end fallback is retained for audio-only jobs, where a single audio
+    # stream is sufficient. A video-only front-end stream would silently remove
+    # the original soundtrack, so fail clearly instead of producing a broken dub.
+    if not prefer_audio:
+        raise RuntimeError(
+            "yt-dlp could not download the video; refusing a video-only front-end "
+            "fallback because dubbing requires the original audio"
+        )
+    return Path(_download_via_frontend(url, out_dir, prefer_audio=True))
 
 
 _INSTANCES = [
@@ -150,7 +236,7 @@ _INSTANCES = [
 
 
 def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
-    """Download via an Invidious/Piped API instance (proxies YouTube)."""
+    """Download a single audio stream through an Invidious/Piped instance."""
     import json
     import urllib.request
 
@@ -158,32 +244,35 @@ def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
     if not video_id:
         raise RuntimeError(f"Invalid YouTube URL: {url}")
 
-    last_err = None
+    last_error: Optional[Exception] = None
     for base in _INSTANCES:
         try:
             api = f"{base}/streams/{video_id}"
-            req = urllib.request.Request(api, headers={"User-Agent": "DBYT/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                streams = json.loads(resp.read())
+            request = urllib.request.Request(api, headers={"User-Agent": "DBYT/1.0"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                streams = json.loads(response.read())
 
-            if prefer_audio:
-                audios = [s for s in streams.get("audioStreams", [])]
-                best = max(audios, key=lambda s: s.get("bitrate", 0))
-            else:
-                videos = [s for s in streams.get("videoStreams", [])]
-                best = max(videos, key=lambda s: s.get("quality", ""))
+            audio_streams = streams.get("audioStreams", [])
+            if not audio_streams:
+                raise RuntimeError("front-end returned no audio streams")
+            best = max(audio_streams, key=lambda stream: stream.get("bitrate", 0))
             file_url = best["url"]
-
             ext = "m4a" if prefer_audio else "mp4"
-            dest = out_dir / f"{video_id}.{ext}"
-            req2 = urllib.request.Request(file_url, headers={"User-Agent": "DBYT/1.0"})
-            with urllib.request.urlopen(req2, timeout=600) as r, open(dest, "wb") as f:
-                while True:
-                    chunk = r.read(1024 * 256)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-            return str(dest)
-        except Exception as exc:
-            last_err = exc
-    raise RuntimeError(f"All Invidious/Piped instances failed: {last_err}")
+            destination = out_dir / f"{video_id}.{ext}"
+            request = urllib.request.Request(file_url, headers={"User-Agent": "DBYT/1.0"})
+            with urllib.request.urlopen(request, timeout=600) as response, destination.open("wb") as handle:
+                while chunk := response.read(1024 * 256):
+                    handle.write(chunk)
+            return str(destination)
+        except Exception as exc:  # noqa: BLE001 - try the next instance
+            last_error = exc
+
+    raise RuntimeError(f"All Invidious/Piped instances failed: {last_error}")
+
+
+__all__ = [
+    "download_media",
+    "extract_video_id",
+    "fetch_metadata",
+    "is_valid_youtube_url",
+]
