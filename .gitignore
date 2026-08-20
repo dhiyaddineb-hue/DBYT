@@ -1,0 +1,42 @@
+# =====================================================================
+# DBYT — the repository IS the workspace.
+#
+# Produced files (models, uploads, jobs, output) live in `workspace/` and
+# ARE tracked in Git (via Git LFS — see .gitattributes). Do NOT ignore them.
+# =====================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets — never commit real keys
+.env
+.env.*
+!.env.example
+config.local.json
+secrets/
+*.pem
+
+# Vendored third-party repos (cloned at runtime, not committed)
+third_party/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
+nohup.out
+
+# Node
+node_modules/
+.next/
+dist/
+build/

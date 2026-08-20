@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DBYT — دوبلاج فيديو احترافي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="logo">
+        <span class="logo-mark">▶</span>
+        <span class="logo-text">DBYT</span>
+        <span class="logo-tag">دوبلاج احترافي</span>
+      </div>
+      <a class="github-link" href="https://github.com/dhiyaddineb-hue/DBYT" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        GitHub
+      </a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>حوّل أي فيديو إلى <span class="gradient-text">دوبلاج احترافي</span></h1>
+      <p class="subtitle">صوت بشري طبيعي يحمل نفس مشاعر المتحدث، بعدة لغات، بدقة توقيت عالية.</p>
+    </section>
+
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" id="tab-youtube" role="tab" aria-selected="true">
+          <span class="tab-icon">▶</span> فيديو يوتيوب
+        </button>
+        <button class="tab" id="tab-upload" role="tab" aria-selected="false">
+          <span class="tab-icon">⬆</span> رفع فيديو
+        </button>
+      </div>
+
+      <!-- YouTube panel -->
+      <div class="panel" id="panel-youtube">
+        <label class="field-label" for="youtube-url">رابط يوتيوب</label>
+        <div class="url-wrap">
+          <input
+            type="url"
+            id="youtube-url"
+            class="input url-input"
+            placeholder="https://www.youtube.com/watch?v=..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="link-status" id="link-status" aria-live="polite">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text"></span>
+          </span>
+        </div>
+        <p class="hint" id="video-meta-hint">الصق رابط الفيديو وسيتم التحقق منه وتعبئة الاسم تلقائياً.</p>
+      </div>
+
+      <!-- Upload panel -->
+      <div class="panel hidden" id="panel-upload">
+        <label class="field-label" for="file-input">ملف الفيديو</label>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept="video/*,audio/*" hidden />
+          <div class="dropzone-inner">
+            <div class="dropzone-icon">⬆</div>
+            <p class="dropzone-title">اسحب الملف هنا أو <span class="gradient-text">اضغط للاختيار</span></p>
+            <p class="dropzone-sub">MP4, MKV, MOV, WebM, MP3, WAV ... (حتى 2 جيجابايت)</p>
+          </div>
+        </div>
+        <div class="upload-progress hidden" id="upload-progress">
+          <div class="progress-track"><div class="progress-fill" id="upload-fill"></div></div>
+          <span id="upload-status-text"></span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label class="field-label" for="project-name">اسم المشروع</label>
+        <input type="text" id="project-name" class="input" placeholder="يُعبأ تلقائياً من عنوان الفيديو" />
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label class="field-label" for="target-lang">لغة الدوبلاج (الهدف)</label>
+          <select id="target-lang" class="input select">
+            <option value="ar" selected>العربية</option>
+            <option value="fr">الفرنسية</option>
+            <option value="en">الإنجليزية</option>
+            <option value="es">الإسبانية</option>
+            <option value="de">الألمانية</option>
+            <option value="it">الإيطالية</option>
+            <option value="pt">البرتغالية</option>
+            <option value="tr">التركية</option>
+            <option value="ru">الروسية</option>
+            <option value="zh">الصينية</option>
+            <option value="ja">اليابانية</option>
+            <option value="ko">الكورية</option>
+            <option value="hi">الهندية</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="engine">محرك الصوت</label>
+          <select id="engine" class="input select">
+            <option value="edge" selected>Edge-TTS — مجاني وسريع (افتراضي)</option>
+            <option value="elevenlabs">ElevenLabs — أعلى جودة ومشاعر حقيقية</option>
+            <option value="bark">Bark — مفتوح المصدر بمشاعر (ثقيل)</option>
+            <option value="xtts">XTTS — استنساخ صوت المتحدث (يحتاج GPU)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toggles">
+        <label class="toggle-row">
+          <input type="checkbox" id="keep-bg" checked />
+          <span class="toggle-ui"></span>
+          <span class="toggle-text">الحفاظ على الموسيقى والأصوات الخلفية</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="preserve-emotions" checked />
+          <span class="toggle-ui"></span>
+          <span class="toggle-text">نقل مشاعر المتحدث (فرح، حزن، غضب...)</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="word-level" checked />
+          <span class="toggle-ui"></span>
+          <span class="toggle-text">دقة على مستوى الكلمة (كل كلمة في مكانها الزمني)</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="lip-sync" />
+          <span class="toggle-ui"></span>
+          <span class="toggle-text">مزامنة الشفاه (Wav2Lip) — لتبدو أصلية لا دوبلاج</span>
+        </label>
+      </div>
+
+      <button class="cta" id="start-btn">
+        <span id="cta-text">🎙️ ابدأ الدوبلاج الآن</span>
+      </button>
+
+      <!-- Job status -->
+      <div class="job hidden" id="job-status">
+        <div class="job-head">
+          <span class="job-title" id="job-title"></span>
+          <span class="job-badge" id="job-badge">قيد الانتظار</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="job-fill"></div></div>
+        <p class="job-message" id="job-message"></p>
+        <a class="download-btn hidden" id="download-btn" download>⬇ تحميل الفيديو المدبلج</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon">🎭</div>
+        <h3>مشاعر حقيقية</h3>
+        <p>يكتشف انفعال المتحدث ويطبّقه على الصوت الجديد: فرح، حزن، غضب، مفاجأة.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🌍</div>
+        <h3>لغات متعددة</h3>
+        <p>دبلج أي فيديو إلى العربية والفرنسية والإنجليزية وأكثر من 13 لغة.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⏱️</div>
+        <h3>توقيت دقيق</h3>
+        <p>محاذاة كل جملة مع حركة شفاه المتحدث الأصلية عبر تحليل Whisper.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">DBYT — مفتوح المصدر، مبني على Whisper + TTS. المستودع خاص على GitHub.</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
