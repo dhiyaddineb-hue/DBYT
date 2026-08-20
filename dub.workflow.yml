@@ -1,12 +1,23 @@
 name: Dubbing Pipeline
 
 # =============================================================================
-# The pipeline runs on GITHUB's servers (this IS "GitHub as the workspace"):
-#   - always available (GitHub is always on)
-#   - triggered on demand (workflow_dispatch), on a schedule, or by an
-#     issue/PR comment `dub <url> <lang>`
-#   - writes the dubbed output back into the repository under workspace/output/
-#     and uploads it as an artifact
+# REAL dubbing pipeline — runs on GitHub's servers (GitHub IS the workspace):
+#
+#   download video → Whisper word-level timestamps → translate → TTS (Arabic
+#   neural voice) → place EVERY word at its exact timestamp → duck background
+#   music → [optional] Wav2Lip lip-sync → commit the dubbed video back into
+#   the repository (workspace/output/).
+#
+# Triggers:
+#   • workflow_dispatch  — manually with a YouTube URL
+#   • issue_comment      — post "dub <url> <lang>" on any issue
+#   • schedule           — nightly batch (edit as needed)
+#
+# NOTE on lip-sync: Wav2Lip re-animates the mouth and is the ONLY step that
+# needs a GPU to be practical. The audio dub (word-level timing) runs fine on
+# CPU. To use lip-sync, either (a) add a self-hosted GPU runner and set
+# `runs-on: [self-hosted, gpu]`, or (b) run the same `backend.cli --lip-sync`
+# command on a GPU machine / Google Colab.
 # =============================================================================
 
 on:
@@ -30,43 +41,47 @@ on:
         description: "Project name (auto-filled from title if empty)"
         required: false
         type: string
+      granularity:
+        description: "word = every word in its place | segment = per sentence"
+        required: false
+        default: "word"
+        type: string
       lip_sync:
         description: "Re-animate the mouth (Wav2Lip) — needs GPU"
         required: false
         default: "false"
         type: string
   schedule:
-    # Example: run a nightly batch (edit URL list in a jobs file as needed)
     - cron: "0 0 * * *"
   issue_comment:
     types: [created]
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   dub:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Determine inputs (from dispatch or issue comment)
+      - name: Determine inputs (dispatch, schedule, or issue comment)
         id: inputs
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           URL="${{ inputs.youtube_url }}"
-          LANG="${TARGET_LANG:-${{ inputs.target_language }}}"
-          ENGINE="${ENGINE:-${{ inputs.engine }}}"
+          LANG="${{ inputs.target_language }}"
+          ENGINE="${{ inputs.engine }}"
           PROJECT="${{ inputs.project_name }}"
+          GRAN="${{ inputs.granularity }}"
           LIPSYNC="${{ inputs.lip_sync }}"
-          # If triggered by an issue comment "dub <url> [lang]"
+
+          # Trigger by issue comment: "dub <url> [lang]"
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             if [[ "$COMMENT_BODY" =~ ^dub[[:space:]]+(.+)$ ]]; then
               REST="${BASH_REMATCH[1]}"
@@ -75,13 +90,16 @@ jobs:
               LANG="${L2:-ar}"
             fi
           fi
+
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "lang=$LANG" >> "$GITHUB_OUTPUT"
-          echo "engine=$ENGINE" >> "$GITHUB_OUTPUT"
+          echo "lang=${LANG:-ar}" >> "$GITHUB_OUTPUT"
+          echo "engine=${ENGINE:-edge}" >> "$GITHUB_OUTPUT"
           echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "lipsync=$LIPSYNC" >> "$GITHUB_OUTPUT"
+          echo "granularity=${GRAN:-word}" >> "$GITHUB_OUTPUT"
+          echo "lipsync=${LIPSYNC:-false}" >> "$GITHUB_OUTPUT"
+
           if [ -z "$URL" ]; then
-            echo "::warning::No YouTube URL provided — skipping (schedule run with no URL)."
+            echo "::warning::No URL provided (schedule run). Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -89,9 +107,7 @@ jobs:
 
       - name: Install system dependencies (ffmpeg)
         if: steps.inputs.outputs.skip != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Set up Python
         if: steps.inputs.outputs.skip != 'true'
@@ -104,7 +120,7 @@ jobs:
         if: steps.inputs.outputs.skip != 'true'
         run: pip install -r requirements.txt faster-whisper
 
-      - name: Run dubbing pipeline
+      - name: Run REAL dubbing pipeline (word-level timing)
         if: steps.inputs.outputs.skip != 'true'
         env:
           DBYT_ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -114,7 +130,15 @@ jobs:
             --target-language "${{ steps.inputs.outputs.lang }}" \
             --engine "${{ steps.inputs.outputs.engine }}" \
             --project-name "${{ steps.inputs.outputs.project }}" \
-            --lip-sync "${{ steps.inputs.outputs.lipsync }}"
+            --granularity "${{ steps.inputs.outputs.granularity }}"
+
+      - name: Lip-sync the mouth (Wav2Lip, optional)
+        if: steps.inputs.outputs.skip != 'true' && steps.inputs.outputs.lipsync == 'true'
+        run: |
+          # Wav2Lip needs torch + its own repo (cloned by ensure_models())
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install opencv-python numpy librosa
+          echo "::warning::Lip-sync on CPU is very slow for long videos — use a GPU runner."
 
       - name: Persist output in the repository (GitHub = workspace)
         if: steps.inputs.outputs.skip != 'true'
@@ -125,7 +149,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No new output to commit."
           else
-            git commit -m "workspace: store dubbing output (${{ steps.inputs.outputs.lang }})"
+            git commit -m "workspace: dubbed video (${{ steps.inputs.outputs.lang }})"
             git push
           fi
 
