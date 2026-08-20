@@ -12,6 +12,9 @@ bgutil-ytdlp-pot-provider==1.3.1
 # Browser-based PO-token provider; useful when GitHub Actions IPs are bot-challenged.
 yt-dlp-getpot-wpc==1.0.0
 
+# Browser-driven Cobalt downloader
+selenium==4.47.0
+
 # Speech-to-text (Whisper) — CPU friendly via CTranslate2
 faster-whisper==1.0.3
 
