@@ -5,6 +5,7 @@ Uses `yt-dlp` under the hood. These functions are shared by the API
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -40,6 +41,13 @@ def _slugify(title: str, max_len: int = 60) -> str:
 # other clients (android/tv/mweb/ios) often bypass that check.
 _PLAYER_CLIENTS = ["android", "tv", "mweb", "ios", "web"]
 
+# Optional cookies file path (set via env DBYT_YOUTUBE_COOKIES or the standard
+# ~/.cache/yt-dlp/youtube/cookies.txt used by AnimMouse/setup-yt-dlp/cookies).
+# Cookies from a logged-in YouTube account bypass the datacenter bot-wall.
+_COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
+    "~/.cache/yt-dlp/youtube/cookies.txt"
+)
+
 
 def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefer_audio: bool = True):
     """Try yt-dlp across several player clients; return (info, filename)."""
@@ -53,6 +61,9 @@ def _try_extract(url: str, download: bool, out_dir: Optional[Path] = None, prefe
             "noplaylist": True,
             "extractor_args": {"youtube": {"player_client": [client]}},
         }
+        # Use cookies if available (bypasses YouTube's datacenter bot-wall)
+        if os.path.exists(_COOKIES_PATH):
+            opts["cookiefile"] = _COOKIES_PATH
         if download:
             opts["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
             if prefer_audio:
