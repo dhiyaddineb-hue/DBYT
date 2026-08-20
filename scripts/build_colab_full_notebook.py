@@ -44,7 +44,7 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 code("""#@title 1) تثبيت الأدوات الأساسية
 !sudo apt-get update -qq
 !sudo apt-get install -y -qq ffmpeg
-!pip -q install -U "yt-dlp[default]==2026.8.19" yt-dlp-ejs requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
+!pip -q install -U "yt-dlp[default]==2026.8.19" yt-dlp-ejs "pydantic==2.7.4" "pydantic-settings==2.3.4" requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
 
 from pathlib import Path
 import importlib.metadata
@@ -81,6 +81,7 @@ if shutil.which('ffmpeg') is None or shutil.which('yt-dlp') is None:
     raise RuntimeError('ffmpeg or yt-dlp is not available on PATH after installation.')
 print('✅ Base Colab environment ready:', WORK_DIR)
 print('✅ yt-dlp:', importlib.metadata.version('yt-dlp'), '| Deno:', deno_path)
+print('✅ pydantic-settings:', importlib.metadata.version('pydantic-settings'))
 """)
 
 code("""#@title 2) الإعدادات والأسرار
