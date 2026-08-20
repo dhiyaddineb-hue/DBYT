@@ -21,13 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yt-dlp
-        uses: AnimMouse/setup-yt-dlp@v3
-
-      - name: Setup YouTube cookies (bypass bot check)
-        uses: AnimMouse/setup-yt-dlp/cookies@v3
-        with:
-          cookies: ${{ secrets.YOUTUBE_COOKIES }}
+      - name: Write YouTube cookies (bypass bot check)
+        run: |
+          mkdir -p ~/.cache/yt-dlp/youtube
+          cat > ~/.cache/yt-dlp/youtube/cookies.txt << 'COOKIES_EOF'
+          ${{ secrets.YOUTUBE_COOKIES }}
+          COOKIES_EOF
+          echo "cookies written ($(wc -l < ~/.cache/yt-dlp/youtube/cookies.txt) lines)"
 
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
