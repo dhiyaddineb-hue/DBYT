@@ -24,6 +24,7 @@ env:
   DBYT_WPC_BROWSER: /usr/bin/google-chrome
   DBYT_COBALT_BROWSER: "1"
   DBYT_COBALT_URL: https://cobalt.tools/
+  DBYT_DOWNLOADER_TIMEOUT: "60"
 
 jobs:
   dub:
@@ -111,9 +112,10 @@ jobs:
           YOUTUBE_URL: ${{ inputs.youtube_url }}
           TARGET_LANGUAGE: ${{ inputs.target_language }}
           DBYT_YOUTUBE_PROXIES: ${{ secrets.YOUTUBE_PROXIES }}
-        run: python -m backend.cli "$YOUTUBE_URL" --target-language "$TARGET_LANGUAGE"
+        run: python -u -m backend.cli "$YOUTUBE_URL" --target-language "$TARGET_LANGUAGE"
 
       - name: Commit generated workspace output
+        if: success()
         run: |
           set -euo pipefail
           git config user.name "DBYT bot"
@@ -126,11 +128,13 @@ jobs:
             git push
           fi
 
-      - name: Upload dubbed output
+      - name: Upload dubbed output and downloader diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dubbed-video-${{ github.run_id }}
-          path: workspace/output
+          path: |
+            workspace/output
+            workspace/source/.browser-diagnostics
           if-no-files-found: warn
           retention-days: 7
