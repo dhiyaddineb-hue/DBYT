@@ -1,11 +1,8 @@
 """Browser-driven multi-site video downloader.
 
-DBYT uses a real Chromium session and a rotating list of public web download
-pages. Each site gets the same workflow: open page -> paste YouTube URL ->
-submit -> wait for a browser download. The first non-trivial media file wins.
-
-This is intentionally UI-driven rather than calling third-party downloader APIs.
-Only use it for media you are authorized to save.
+DBYT opens each public downloader in Chromium, submits the YouTube URL, and
+waits for a real browser download. Each attempt is bounded and emits progress
+logs so a GitHub Actions run never appears frozen.
 """
 from __future__ import annotations
 
@@ -18,9 +15,6 @@ from urllib.parse import quote
 
 _CHROME_BINARY = os.environ.get("DBYT_CHROME_BINARY", "/usr/bin/google-chrome")
 
-# Large fallback pool. Availability changes frequently, so failures are expected
-# and immediately advance to the next site. Some entries are mirrors/variants of
-# the same service; keeping them increases resilience when a domain changes.
 DEFAULT_SITES = (
     ("cobalt", "https://cobalt.tools/"),
     ("cobalt-community", "https://cobalt.meowing.de/"),
@@ -48,19 +42,15 @@ DEFAULT_SITES = (
     ("pastedownload", "https://pastedownload.com/"),
 )
 
-_VIDEO_EXTENSIONS = {
-    ".mp4", ".m4v", ".webm", ".mkv", ".mov", ".avi", ".flv", ".wmv", ".ts", ".m2ts"
-}
+_VIDEO_EXTENSIONS = {".mp4", ".m4v", ".webm", ".mkv", ".mov", ".avi", ".flv", ".wmv", ".ts", ".m2ts"}
 _AUDIO_EXTENSIONS = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".opus", ".flac"}
 _IGNORED_EXTENSIONS = {".crdownload", ".tmp", ".part", ".html", ".htm", ".txt", ".json"}
 
 
 def _sites() -> tuple[tuple[str, str], ...]:
-    """Load an optional comma/newline-separated custom site list."""
     raw = os.environ.get("DBYT_DOWNLOADER_SITES", "").strip()
     if not raw:
         return DEFAULT_SITES
-
     parsed: list[tuple[str, str]] = []
     for index, item in enumerate(re.split(r"[,\n]", raw), 1):
         value = item.strip()
@@ -85,13 +75,13 @@ def _configure_chrome(download_dir: Path):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1440,1100")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
     options.add_argument(
         "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
     )
-    options.add_experimental_option(
-        "excludeSwitches", ["enable-automation", "enable-logging"]
-    )
+    options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     options.add_experimental_option(
         "prefs",
         {
@@ -103,13 +93,11 @@ def _configure_chrome(download_dir: Path):
     )
 
     driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(25)
+    driver.set_script_timeout(20)
     driver.execute_cdp_cmd(
         "Browser.setDownloadBehavior",
-        {
-            "behavior": "allow",
-            "downloadPath": str(download_dir.resolve()),
-            "eventsEnabled": True,
-        },
+        {"behavior": "allow", "downloadPath": str(download_dir.resolve()), "eventsEnabled": True},
     )
     return driver
 
@@ -135,19 +123,22 @@ def _media_files(download_dir: Path) -> list[Path]:
     return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def _wait_for_media(download_dir: Path, timeout: int) -> Path:
+def _wait_for_media(download_dir: Path, timeout: int, label: str) -> Path:
     deadline = time.monotonic() + timeout
+    next_report = time.monotonic() + 5
     while time.monotonic() < deadline:
         media = _media_files(download_dir)
         partials = list(download_dir.glob("*.crdownload")) + list(download_dir.glob("*.part"))
         if media and not partials:
             return media[0]
+        if time.monotonic() >= next_report:
+            print(f"⏳ [{label}] still waiting for a download… {max(0, int(deadline - time.monotonic()))}s left", flush=True)
+            next_report = time.monotonic() + 5
         time.sleep(1)
     raise TimeoutError(f"No completed media download within {timeout}s")
 
 
 def _candidate_input(driver):
-    """Find the most likely URL field without hard-coding a site's DOM."""
     from selenium.webdriver.common.by import By
 
     candidates = driver.find_elements(By.CSS_SELECTOR, "input, textarea")
@@ -165,29 +156,22 @@ def _candidate_input(driver):
                     element.get_attribute("type"),
                 )
             ).lower()
-            score = 0
-            for marker in ("url", "link", "video", "youtube", "paste"):
-                if marker in text:
-                    score += 5
+            score = sum(5 for marker in ("url", "link", "video", "youtube", "paste") if marker in text)
             if (element.get_attribute("type") or "").lower() in {"url", "search", "text", ""}:
                 score += 1
             scored.append((score, element))
         except Exception:
             continue
-    if not scored:
-        return None
     scored.sort(key=lambda item: item[0], reverse=True)
-    return scored[0][1]
+    return scored[0][1] if scored else None
 
 
 def _click_download(driver) -> bool:
-    """Click a visible download/result button or link, avoiding obvious ads."""
     from selenium.webdriver.common.by import By
 
-    candidates = driver.find_elements(By.CSS_SELECTOR, "button, a")
     best = None
     best_score = -1
-    for element in candidates:
+    for element in driver.find_elements(By.CSS_SELECTOR, "button, a"):
         try:
             if not element.is_displayed() or not element.is_enabled():
                 continue
@@ -203,27 +187,20 @@ def _click_download(driver) -> bool:
             ).lower()
             if any(marker in label for marker in ("sponsor", "advert", "casino", "popup")):
                 continue
-
-            score = 0
-            for marker in ("download", "mp4", "video", "save", "get file"):
-                if marker in label:
-                    score += 4
+            score = sum(4 for marker in ("download", "mp4", "video", "save", "get file") if marker in label)
             href = (element.get_attribute("href") or "").lower()
             if any(ext in href for ext in (".mp4", ".webm", ".m4a", ".mp3")):
                 score += 10
             if element.get_attribute("download") is not None:
                 score += 8
             if score > best_score:
-                best_score = score
-                best = element
+                best_score, best = score, element
         except Exception:
             continue
-
     if best is None or best_score < 4:
         return False
     try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", best)
-        driver.execute_script("arguments[0].click();", best)
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", best)
         return True
     except Exception:
         try:
@@ -233,81 +210,100 @@ def _click_download(driver) -> bool:
             return False
 
 
-def _try_submit(driver, youtube_url: str) -> None:
+def _try_submit(driver, youtube_url: str, label: str) -> None:
     from selenium.webdriver.common.keys import Keys
 
     field = _candidate_input(driver)
     if field is None:
-        raise RuntimeError("Could not find a URL input field")
+        raise RuntimeError("URL input field not found")
+    print(f"📝 [{label}] URL field found; submitting", flush=True)
     field.click()
     field.send_keys(Keys.CONTROL, "a")
     field.send_keys(youtube_url)
     field.send_keys(Keys.ENTER)
     time.sleep(2)
-    _click_download(driver)
+    clicked = _click_download(driver)
+    print(f"🖱️ [{label}] download button clicked={clicked}", flush=True)
 
 
-def _visit_site(driver, name: str, site_url: str, youtube_url: str, download_dir: Path) -> Path:
-    """Attempt one site using several common URL-prefill conventions, then its UI."""
+def _diagnostic_screenshot(driver, diagnostics_dir: Path, name: str) -> None:
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        path = diagnostics_dir / f"{name}.png"
+        driver.save_screenshot(str(path))
+        print(f"📸 Screenshot: {path}", flush=True)
+    except Exception as exc:
+        print(f"⚠️ Screenshot failed: {exc}", flush=True)
+
+
+def _visit_site(driver, name: str, site_url: str, youtube_url: str, download_dir: Path, diagnostics_dir: Path) -> Path:
     _clear_download_dir(download_dir)
-    attempts = [
-        site_url,
-        f"{site_url.rstrip('/')}/#{quote(youtube_url, safe=':/?=&%_-.,')}",
-        f"{site_url.rstrip('/')}/?url={quote(youtube_url, safe='')}",
-        f"{site_url.rstrip('/')}/?video={quote(youtube_url, safe='')}",
-    ]
-    last_error: Exception | None = None
+    label = name.upper()
+    target = f"{site_url.rstrip('/')}/#{quote(youtube_url, safe=':/?=&%_-.,')}"
 
-    for target in attempts:
+    print(f"➡️ [{label}] Opening {site_url}", flush=True)
+    try:
+        driver.get(target)
+    except Exception as exc:
+        print(f"⚠️ [{label}] page load timeout/error: {str(exc)[:180]}", flush=True)
         try:
-            driver.get(target)
-            time.sleep(2)
-            # The URL may already have been prefilled and triggered processing.
-            try:
-                return _wait_for_media(download_dir, timeout=12)
-            except TimeoutError:
-                pass
+            driver.execute_script("window.stop();")
+        except Exception:
+            pass
 
-            _try_submit(driver, youtube_url)
-            return _wait_for_media(download_dir, timeout=35)
-        except Exception as exc:  # noqa: BLE001 - move to the next site/pattern
-            last_error = exc
-            _clear_download_dir(download_dir)
-            try:
-                driver.execute_script("window.stop();")
-            except Exception:
-                pass
+    print(f"✅ [{label}] page reached: title={driver.title[:100]!r}", flush=True)
+    print(f"🌐 [{label}] waiting for automatic download (20s)", flush=True)
+    try:
+        return _wait_for_media(download_dir, 20, label)
+    except TimeoutError:
+        pass
 
-    raise RuntimeError(f"{name}: {last_error}")
+    # Fall back to the actual site form.
+    _try_submit(driver, youtube_url, label)
+    print(f"🌐 [{label}] waiting for browser download (40s)", flush=True)
+    try:
+        return _wait_for_media(download_dir, 40, label)
+    except TimeoutError:
+        _diagnostic_screenshot(driver, diagnostics_dir, f"{name}-timeout")
+        raise
 
 
 def download_via_browser(url: str, out_dir: Path, timeout: int | None = None) -> Path:
-    """Try many public downloader sites in Chrome and return the first valid file."""
+    """Try many downloader sites in Chrome and return the first valid media file."""
+    del timeout  # kept for API compatibility; per-site limits are explicit
     out_dir.mkdir(parents=True, exist_ok=True)
-    timeout = timeout or int(os.environ.get("DBYT_DOWNLOADER_TIMEOUT", "60"))
     download_dir = out_dir / ".browser-download"
+    diagnostics_dir = out_dir / ".browser-diagnostics"
     download_dir.mkdir(parents=True, exist_ok=True)
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
 
     driver = _configure_chrome(download_dir)
     failures: list[str] = []
+    sites = _sites()
     try:
-        sites = _sites()
-        print(f"🌐 Browser downloader pool: {len(sites)} sites")
+        print(f"🌐 Browser downloader pool: {len(sites)} sites", flush=True)
         for index, (name, site_url) in enumerate(sites, 1):
-            print(f"🌐 [{index}/{len(sites)}] Trying {name}: {site_url}")
+            print(f"\n===== SITE {index}/{len(sites)}: {name} =====", flush=True)
             try:
-                result = _visit_site(driver, name, site_url, url, download_dir)
+                result = _visit_site(driver, name, site_url, url, download_dir, diagnostics_dir)
                 safe_ext = re.sub(r"[^a-z0-9]", "", result.suffix.lower().lstrip(".")) or "mp4"
                 destination = out_dir / f"source.{safe_ext}"
                 shutil.copy2(result, destination)
-                print(f"✅ Browser downloader succeeded: {name} -> {destination.name} ({destination.stat().st_size} bytes)")
+                print(
+                    f"✅ Browser downloader succeeded: {name} -> {destination.name} ({destination.stat().st_size} bytes)",
+                    flush=True,
+                )
                 return destination
-            except Exception as exc:  # noqa: BLE001 - this is the whole fallback strategy
+            except Exception as exc:
                 message = str(exc).replace("\n", " ")[:220]
                 failures.append(f"{name}: {message}")
-                print(f"⚠️ {name} failed: {message}")
+                print(f"❌ [{name}] FAILED: {message}", flush=True)
                 try:
                     driver.delete_all_cookies()
+                except Exception:
+                    pass
+                try:
+                    driver.get("about:blank")
                 except Exception:
                     pass
 
