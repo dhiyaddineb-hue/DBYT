@@ -75,6 +75,11 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
     """Download the best available audio (or video) for a YouTube URL.
 
     Returns the path to the downloaded file (audio as .m4a by default).
+
+    Tries, in order:
+      1. yt-dlp directly (needs access to YouTube/Google)
+      2. Invidious / Piped public instances (alternative front-ends that proxy
+         the video) — solves the "YouTube blocked" problem.
     """
     import yt_dlp
 
@@ -104,11 +109,68 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
             "merge_output_format": "mp4",
         }
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+    except Exception as exc:  # noqa: BLE001 — fall back to Invidious/Piped
+        print(f"[youtube] direct download failed ({exc}); trying Invidious/Piped…")
+        filename = _download_via_frontend(url, out_dir, prefer_audio)
 
     # After FFmpegExtractAudio the extension changes to m4a
     if prefer_audio and not Path(filename).exists():
         filename = str(Path(filename).with_suffix(".m4a"))
     return Path(filename)
+
+
+# Public Invidious/Piped instances (rotate; add more as needed).
+_INSTANCES = [
+    "https://inv.nadeko.net",
+    "https://invidious.f5.si",
+    "https://yewtu.be",
+    "https://invidious.nerdvpn.de",
+    "https://pipedapi.kavin.rocks",
+    "https://api.piped.private.coffee",
+]
+
+
+def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
+    """Download via an Invidious/Piped API instance (proxies YouTube)."""
+    import json
+    import urllib.request
+
+    video_id = extract_video_id(url)
+    if not video_id:
+        raise RuntimeError(f"Invalid YouTube URL: {url}")
+
+    last_err = None
+    for base in _INSTANCES:
+        try:
+            # Piped API: /streams/{id} returns a JSON of streams
+            api = f"{base}/streams/{video_id}"
+            req = urllib.request.Request(api, headers={"User-Agent": "DBYT/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                streams = json.loads(resp.read())
+
+            # Prefer audio-only, else video
+            if prefer_audio:
+                audios = [s for s in streams.get("audioStreams", [])]
+                best = max(audios, key=lambda s: s.get("bitrate", 0))
+            else:
+                videos = [s for s in streams.get("videoStreams", [])]
+                best = max(videos, key=lambda s: s.get("quality", ""))
+            file_url = best["url"]
+
+            ext = "m4a" if prefer_audio else "mp4"
+            dest = out_dir / f"{video_id}.{ext}"
+            req2 = urllib.request.Request(file_url, headers={"User-Agent": "DBYT/1.0"})
+            with urllib.request.urlopen(req2, timeout=600) as r, open(dest, "wb") as f:
+                while True:
+                    chunk = r.read(1024 * 256)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            return str(dest)
+        except Exception as exc:  # noqa: BLE001 — try next instance
+            last_err = exc
+    raise RuntimeError(f"All Invidious/Piped instances failed: {last_err}")

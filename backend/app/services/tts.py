@@ -11,7 +11,9 @@ controls:
 - `edge`: free, fast, natural Microsoft neural voices, multilingual (default).
 - `elevenlabs`: premium, human-like with true emotion (needs API key).
 - `bark`: open-source, emotion-aware (needs heavier deps; optional).
-- `xtts`: open-source voice cloning (needs GPU; optional).
+- `xtts`: open-source voice cloning (Coqui XTTS v2, 17 languages incl. Arabic).
+- `piper`: OFFLINE, ultra-fast neural TTS (Rhasspy) with an Arabic voice.
+  → solves "TTS host blocked" by running 100% locally (ONNX, CPU).
 """
 from __future__ import annotations
 
@@ -51,6 +53,8 @@ def get_engine(name: Optional[str] = None):
         return BarkEngine()
     if name == "xtts":
         return XTTSEngine()
+    if name == "piper":
+        return PiperEngine()
     raise ValueError(f"Unknown TTS engine: {name}")
 
 
@@ -178,8 +182,102 @@ class BarkEngine:
         return out_path
 
 
+class PiperEngine:
+    """Piper TTS (Rhasspy) — 100% OFFLINE neural voices on CPU.
+
+    Fast ONNX models. The Arabic voice is fetched into ``settings.models_dir``
+    on first use, so no runtime network is needed afterwards (solves the
+    "TTS host blocked" problem by design).
+
+    Install:  pip install piper-tts
+    """
+
+    name = "piper"
+
+    # language -> (huggingface repo file, quality)
+    _VOICES = {
+        "ar": ("ar_JO/kareem/medium", "ar_JO-kareem-medium"),
+        "en": ("en_US/amy/medium", "en_US-amy-medium"),
+        "fr": ("fr_FR/siwis/medium", "fr_FR-siwis-medium"),
+        "de": ("de_DE/thorsten/medium", "de_DE-thorsten-medium"),
+        "es": ("es_ES/davefx/medium", "es_ES-davefx-medium"),
+    }
+
+    def _ensure_voice(self, lang: str) -> str:
+        from piper.download import ensure_voice_exists, find_voice, get_voices
+
+        voice_key = self._VOICES.get(lang, self._VOICES["en"])[1]
+        try:
+            voices = get_voices()
+            return next(v for v in voices if voice_key in v)[0]
+        except Exception:  # noqa: BLE001
+            return ensure_voice_exists(voice_key, [str(settings.models_dir)], str(settings.models_dir))
+
+    async def synthesize(
+        self,
+        text: str,
+        lang: str,
+        out_path: Path,
+        emotion: str = "neutral",
+        rate: float = 1.0,
+        pitch: float = 0,
+        volume: float = 0,
+        voice: Optional[str] = None,
+    ) -> Path:
+        import asyncio
+        import wave
+
+        def _run():
+            from piper import PiperVoice
+
+            model_path = voice or self._ensure_voice(lang)
+            v = PiperVoice.load(model_path)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(out_path), "wb") as wf:
+                v.synthesize(text, wf)
+
+        await asyncio.to_thread(_run)
+        return out_path
+
+
 class XTTSEngine:
-    """Open-source voice cloning (Coqui XTTS). Needs GPU; optional dependency."""
+    """Open-source voice cloning (Coqui XTTS v2). Needs GPU for real-time.
+
+    Clones the ORIGINAL speaker's voice from a 6s sample, so the dub keeps the
+    speaker's identity in the target language — the closest free equivalent to
+    ElevenLabs. Supports 17 languages including Arabic.
+
+    Install:  pip install coqui-tts
+    """
+
+    name = "xtts"
+
+    async def synthesize(
+        self,
+        text: str,
+        lang: str,
+        out_path: Path,
+        emotion: str = "neutral",
+        rate: float = 1.0,
+        pitch: float = 0,
+        volume: float = 0,
+        voice: Optional[str] = None,
+    ) -> Path:
+        import asyncio
+
+        def _run():
+            from TTS.api import TTS
+
+            tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+            tts.tts_to_file(
+                text=text,
+                speaker_wav=voice,  # path to a 6s+ reference clip of the speaker
+                language=lang,
+                file_path=str(out_path),
+            )
+
+        await asyncio.to_thread(_run)
+        return out_path
 
     name = "xtts"
 

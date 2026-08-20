@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # Translation
     default_target_lang: str = "ar"
-    translator_backend: str = "google"  # google | openai | deepl | none
+    translator_backend: str = "google"  # google | openai | argos | nllb
 
     # Dubbing precision
     granularity: str = "word"  # word (each word in its place) | segment
