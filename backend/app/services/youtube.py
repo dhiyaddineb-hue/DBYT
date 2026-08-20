@@ -42,11 +42,10 @@ def _slugify(title: str, max_len: int = 60) -> str:
 
 
 # Embedded clients often remain available when the browser client is challenged.
-# Keep them first so an expired cookie cannot block an otherwise public video.
+# Keep resilient clients first so a stale cookie cannot block a public video.
 _PLAYER_CLIENTS = [
     "android_vr",
     "tv_embedded",
-    "android",
     "web",
     "web_embedded",
     "mweb",
@@ -62,12 +61,7 @@ _COOKIES_PATH = os.environ.get("DBYT_YOUTUBE_COOKIES") or os.path.expanduser(
 
 
 def _has_usable_cookies(path: str | os.PathLike[str]) -> bool:
-    """Return true only when a Netscape cookie file contains cookie rows.
-
-    GitHub Actions creates the file from a secret. If the secret is missing or
-    empty, treating the header-only file as authenticated makes yt-dlp choose a
-    less reliable client order and produces confusing diagnostics.
-    """
+    """Return true only when a Netscape cookie file contains cookie rows."""
     try:
         cookie_path = Path(path)
         if not cookie_path.is_file() or cookie_path.stat().st_size == 0:
@@ -106,8 +100,6 @@ def _downloaded_file(
         if candidate.is_file() and candidate.stat().st_size > 0:
             return candidate
 
-    # This also handles an unusual container extension selected by a future
-    # yt-dlp release while avoiding .part and temporary files.
     if video_id:
         discovered = sorted(
             (
@@ -131,12 +123,7 @@ def _try_extract(
     out_dir: Optional[Path] = None,
     prefer_audio: bool = True,
 ):
-    """Try yt-dlp across player clients; return ``(info, filename)``.
-
-    For metadata requests no format selector is supplied. This is important:
-    selecting ``bestaudio`` during metadata-only extraction can fail when a
-    player client exposes metadata but not that particular stream.
-    """
+    """Try yt-dlp across player clients; return ``(info, filename)``."""
     import yt_dlp
 
     if download and out_dir is None:
@@ -145,39 +132,42 @@ def _try_extract(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     has_cookies = _has_usable_cookies(_COOKIES_PATH)
-    clients = _PLAYER_CLIENTS
     last_error: Optional[Exception] = None
 
-    for client in clients:
+    for client in _PLAYER_CLIENTS:
         options = {
             "quiet": True,
-            "no_warnings": True,
+            "no_warnings": False,
             "noplaylist": True,
             "extractor_args": {"youtube": {"player_client": [client]}},
             "http_headers": {"User-Agent": _BROWSER_UA},
+            # Node 22 is installed by CI and is the supported runtime for the
+            # current yt-dlp EJS solver. Explicitly enabling it avoids falling
+            # back to an unavailable Deno runtime on GitHub-hosted runners.
+            "js_runtimes": {"node": {}},
+            "retries": 3,
+            "fragment_retries": 3,
+            "file_access_retries": 3,
+            "extractor_retries": 3,
         }
-        # Embedded clients are intentionally tried without browser cookies.
-        # This keeps an expired secret from turning a public video into a
-        # sign-in failure; browser clients still receive the cookie when useful.
         if has_cookies and client not in {"android_vr", "tv_embedded", "web_embedded"}:
             options["cookiefile"] = _COOKIES_PATH
         if download:
-            options["format"] = (
-                "ba/b" if prefer_audio else "b"
-            )
+            # Prefer separate best video + audio streams and fall back to a
+            # combined stream when necessary. This is substantially more
+            # reliable than requesting only the legacy `b` format on YouTube.
+            options["format"] = "bv*+ba/b"
             options["outtmpl"] = str(out_dir / "%(id)s.%(ext)s")
+            options["merge_output_format"] = "mp4"
             if prefer_audio:
+                options["format"] = "ba/b"
                 options["postprocessors"] = [{
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "m4a",
                     "preferredquality": "192",
                 }]
-            else:
-                options["merge_output_format"] = "mp4"
         else:
             options["skip_download"] = True
-            # Metadata does not need a media format. Flat extraction prevents
-            # a missing player stream from becoming a false "invalid URL".
             options["extract_flat"] = True
 
         try:
@@ -187,7 +177,7 @@ def _try_extract(
             return info, prepared_filename
         except Exception as exc:  # noqa: BLE001 - try the next client
             last_error = exc
-            print(f"[youtube] client={client} failed: {str(exc)[:160]}")
+            print(f"[youtube] client={client} failed: {str(exc)[:240]}")
 
     if last_error is not None:
         raise last_error
@@ -260,11 +250,8 @@ def download_media(url: str, out_dir: Path, prefer_audio: bool = True) -> Path:
         )
         return _downloaded_file(info, prepared_filename, out_dir, prefer_audio)
     except Exception as exc:
-        print(f"[youtube] yt-dlp failed ({str(exc)[:160]}); trying front-end fallback…")
+        print(f"[youtube] yt-dlp failed ({str(exc)[:200]}); trying front-end fallback…")
 
-    # Front-end fallback is retained for audio-only jobs, where a single audio
-    # stream is sufficient. A video-only front-end stream would silently remove
-    # the original soundtrack, so fail clearly instead of producing a broken dub.
     if not prefer_audio:
         raise RuntimeError(
             "yt-dlp could not download the video; refusing a video-only front-end "
@@ -285,9 +272,6 @@ _INSTANCES = [
 
 def _download_via_frontend(url: str, out_dir: Path, prefer_audio: bool) -> str:
     """Download a single audio stream through an Invidious/Piped instance."""
-    import json
-    import urllib.request
-
     video_id = extract_video_id(url)
     if not video_id:
         raise RuntimeError(f"Invalid YouTube URL: {url}")
