@@ -16,8 +16,6 @@ import shutil
 import sys
 from pathlib import Path
 
-# Make the repo root importable regardless of how this file is invoked
-# (python -m backend.cli  OR  python backend/cli.py  OR  GitHub Actions).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.app.config import settings
@@ -41,21 +39,27 @@ def parse_args() -> argparse.Namespace:
 
 
 def _download_source(url: str, out_dir: Path) -> Path:
-    """Download through Cobalt in Chrome first, then fall back to yt-dlp."""
-    use_cobalt = os.environ.get("DBYT_COBALT_BROWSER", "1").strip().lower() not in {
+    """Use the browser/site downloader first; yt-dlp is the last fallback."""
+    use_browser = os.environ.get("DBYT_COBALT_BROWSER", "1").strip().lower() not in {
         "0", "false", "no", "off"
     }
-    if use_cobalt:
+    if use_browser:
         try:
             from backend.app.services.cobalt_browser import download_via_browser
-
-            print("🌐 Downloader: Chrome → cobalt.tools → local workspace")
+            print("🌐 Downloader: Chrome → browser download sites → local workspace")
             return download_via_browser(url, out_dir)
-        except Exception as exc:  # noqa: BLE001 - deliberate downloader fallback
-            print(f"⚠️ Cobalt browser download failed: {str(exc)[:300]}")
+        except Exception as exc:  # noqa: BLE001 - deliberate fallback
+            print(f"⚠️ Browser downloader failed: {str(exc)[:500]}")
             print("↩️ Falling back to yt-dlp…")
 
     return youtube.download_media(url, out_dir, prefer_audio=False)
+
+
+def _project_name_from_media(media: Path) -> str:
+    """Produce a stable project name without contacting YouTube for metadata."""
+    stem = media.stem.strip() or "project"
+    safe = " ".join(stem.replace("_", " ").replace("-", " ").split())
+    return safe[:80] or "project"
 
 
 def main() -> None:
@@ -66,18 +70,16 @@ def main() -> None:
     project_name = args.project_name or None
     work_dir = Path(args.output_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
-
     progress = lambda p, m: print(f"[{p:3d}%] {m}")  # noqa: E731
 
     if is_url:
-        meta = youtube.fetch_metadata(target)
-        if not meta.get("valid"):
-            raise SystemExit(f"Invalid/unavailable URL: {meta.get('error')}")
-        project_name = project_name or meta.get("suggested_project_name") or "project"
-        print(f"🎬 Dubbing: {meta.get('title')}")
-        print(f"🌍 Target language: {args.target_language} | Engine: {args.engine}")
-
+        # Critical ordering: do NOT call YouTube metadata extraction first.
+        # GitHub-hosted runners can be bot-challenged by YouTube even when a
+        # normal browser-based downloader site can retrieve the media.
         media = _download_source(target, work_dir / "source")
+        project_name = project_name or _project_name_from_media(media)
+        print(f"🎬 Source downloaded: {media.name}")
+        print(f"🌍 Target language: {args.target_language} | Engine: {args.engine}")
     else:
         media = Path(target)
         if not media.exists():
@@ -96,7 +98,6 @@ def main() -> None:
     )
     final = asyncio.run(pipeline.run(media, work_dir / "work"))
 
-    # Move to the output dir with the project name
     dest = work_dir / f"{project_name}{final.suffix}"
     shutil.move(str(final), str(dest))
     print(f"\n✅ Done! Output: {dest}")
