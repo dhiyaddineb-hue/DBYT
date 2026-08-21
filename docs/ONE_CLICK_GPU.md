@@ -1,48 +1,55 @@
-# DBYT — تشغيل الدبلجة بضغطة واحدة من GitHub
+# DBYT — YouTube إلى GitHub بضغطة واحدة
 
-يضيف Workflow `One-click GPU dubbing` زرًا واحدًا داخل GitHub Actions. يكتب المستخدم رابط الفيديو ويضغط **Run workflow** فقط. إذا كان `KAGGLE_API_TOKEN` موجودًا، يرسل GitHub نسخة التشغيل إلى Kaggle GPU؛ وإذا لم يكن موجودًا، يستخدم GitHub CPU تلقائيًا مع Whisper `tiny` وSherpa بدل التوقف بخطأ. في كلا المسارين ينشر `mp4` و`run.json` و`pipeline.log` في GitHub Release.
+يعمل Workflow `One-click YouTube to GitHub dubbing` بالسلسلة التالية:
 
-## الإعداد الأول فقط
+```text
+GitHub Actions
+    ↓ يرسل رابط YouTube إلى Kaggle
+Kaggle
+    ↓ ينزّل source.mp4 فقط
+GitHub Release مؤقت
+    ↓ يسحب source.mp4
+GitHub Actions CPU
+    ↓ Whisper + الترجمة + Sherpa
+GitHub Release نهائي
+```
 
-أنشئ Kaggle API token من [Kaggle Account API](https://www.kaggle.com/settings/api)، ثم أضف Secret المصادقة في مستودع GitHub من:
+بعد الإعداد الأول، لا تحتاج إلى فتح Kaggle أو رفع الفيديو يدويًا. تضغط **Run workflow** في GitHub وتضع رابط YouTube فقط.
+
+## الإعداد الأول مرة واحدة
+
+أنشئ API token من [Kaggle API Settings](https://www.kaggle.com/settings/api)، ثم أضف Secret في مستودع GitHub من:
 
 `Settings → Secrets and variables → Actions → New repository secret`
 
 | الاسم | القيمة |
 |---|---|
-| `KAGGLE_API_TOKEN` | اختياري. رمز Kaggle API من أجل تشغيل GPU وFasih. إذا غاب، يعمل المسار الاحتياطي على GitHub CPU مع Sherpa. |
-| `KAGGLE_KERNEL_ID` | اختياري، ويُستخدم فقط مع Kaggle GPU إذا لم يستطع Workflow اكتشاف Kernel الشخصي. |
+| `KAGGLE_API_TOKEN` | قيمة Kaggle API token |
+| `KAGGLE_KERNEL_ID` | اختياري؛ الصيغة `kaggle_username/dbyt-download` إذا لم يستطع Workflow اكتشاف حساب Kaggle من Kernels السابقة |
 
-لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا. يحاول Workflow اكتشاف اسم مستخدم Kaggle تلقائيًا من Kernels الخاصة بالحساب، ثم يستخدم `username/dbyt-one-click`. إذا لم يكن للحساب أي Kernel سابق ولم يستطع Workflow اكتشاف اسم المستخدم، أضف `KAGGLE_KERNEL_ID` اختياريًا. عدم وجود هذه الأسرار لا يمنع التشغيل؛ يختار Workflow مسار GitHub CPU تلقائيًا. [1] [2]
+يمكنك أيضًا إنشاء Secret اختياري باسم `YOUTUBE_COOKIES` داخل Kaggle لاستخدام cookies حديثة أثناء التنزيل. لا تضع cookies داخل المستودع أو داخل الكود.
 
-إذا كان المصدر رابط YouTube ويحتاج إلى cookies، أضف Secret باسم `YOUTUBE_COOKIES` في GitHub Actions أو داخل حساب Kaggle، وليس داخل الكود. يجب أن يكون ملف cookies حديثًا؛ إذا ظهر في السجل `cookies are no longer valid` فلا تعاد المحاولة بالملف نفسه. يجرب Workflow أولًا cookies ثم بدونها، وبعد ذلك يستخدم فقط مسارات fallback التي يصرّح بها المشغل عبر `COBALT_API_URL`/`COBALT_API_KEY` أو `INVIDIOUS_INSTANCES` أو `YOUTUBE_PROXIES`. إذا لم تتوفر هذه المسارات وحجبت YouTube شبكة GitHub، استخدم رابط GitHub Release مباشر للفيديو؛ هذا هو المسار الأكثر ثباتًا.
+## التشغيل
 
-## التشغيل المتكرر
+افتح [Workflow التشغيل](https://github.com/dhiyaddineb-hue/DBYT/actions/workflows/one-click-gpu-dubbing.yml)، ثم اضغط **Run workflow** وأدخل:
 
-افتح:
+| الحقل | القيمة المقترحة |
+|---|---|
+| `source_url` | رابط YouTube الكامل |
+| `target_language` | `ar` للعربية |
+| `project_name` | اسم النتيجة، مثل `dbyt-project` |
+| `whisper_model` | `tiny` للسرعة على GitHub CPU، أو `base` لجودة أعلى |
 
-`Actions → One-click GPU dubbing → Run workflow`
+بعد التشغيل، ينشئ GitHub Release مؤقتًا للمصدر، ثم Release نهائيًا للفيديو المدبلج. إذا فشل Kaggle في التنزيل، ستجد `download.log` في Artifact الخاص بالتشغيل.
 
-ثم أدخل `source_url`. يمكن أن يكون الرابط رابط YouTube، أو رابطًا مباشرًا لملف فيديو عام، أو رابط GitHub Release asset عام. اختر `fasih` للعربية الفصحى عند إعداد Kaggle GPU، ثم اختر `small` للجودة الأعلى أو `base`/`tiny` للسرعة. إذا لم يُضف `KAGGLE_API_TOKEN`، سيستبدل Workflow المحرك تلقائيًا بـ Sherpa ويستخدم Whisper `tiny` عند اختيار `small` حتى لا يتوقف التشغيل. بعد الضغط على **Run workflow**، لا تحتاج إلى فتح Kaggle أو تشغيل Notebook يدويًا.
+## القيود الواقعية
 
-عند النجاح، يطبع سجل GitHub رابط Release النهائي بصيغة:
+Kaggle هو الذي يحاول تنزيل YouTube، لذلك لا نستخدم GitHub لتنزيل YouTube مباشرة. إذا حجب YouTube شبكة Kaggle أيضًا، فستظهر رسالة في `download.log`، ولا يستطيع الكود تجاوزها دون cookies حديثة أو مسار تنزيل مصرح به. في هذه الحالة حدّث Secret `YOUTUBE_COOKIES` من جلسة YouTube صالحة ثم أعد تشغيل Workflow.
 
-```text
-https://github.com/<owner>/<repo>/releases/tag/dbyt-result-<run-id>
-```
-
-## ملاحظة عن رفع ملف محلي
-
-واجهة `workflow_dispatch` في GitHub تقبل نصًا أو رابطًا، ولا توفر خانة رفع ملف ثنائي مباشرة داخل زر **Run workflow**. لذلك لملف موجود على جهازك، يجب رفعه مرة واحدة إلى GitHub Release أو إلى استضافة عامة ثم وضع الرابط في `source_url`. بعد توفير الرابط، تصبح كل عملية لاحقة ضغطة واحدة.
-
-## ما يحدث داخليًا
-
-يولّد GitHub Kernel Kaggle خاصًا بالتشغيل الحالي، ويثبت قيم التشغيل داخله دون وضع الأسرار في الكود، ثم يطلب Kaggle GPU من نوع T4 مع Internet. يشغّل Kernel Whisper والترجمة وFasih، ويعود تلقائيًا إلى Sherpa إذا فشل تحميل Fasih. بعد انتهاء Kernel، ينزّل GitHub المخرجات وينشئ Release جديدًا.
-
-يتطلب هذا التصميم توفر GPU في طابور Kaggle؛ فقد ينتظر التشغيل عند ازدحام الخدمة. كما أن YouTube قد يحجب أي شبكة سحابية، ولذلك لا يمكن ضمان التنزيل من YouTube في كل تشغيل. عند الحجب استخدم رابط ملف مباشر في GitHub Release بدل إعادة محاولة YouTube.
+الدبلجة في هذه النسخة تنفذ داخل GitHub CPU باستخدام `Sherpa`، لأن المطلوب هو أن يكون Kaggle مسؤولًا عن التنزيل فقط. يستخدم Workflow `DBYT_WHISPER_DEVICE=cpu` و`DBYT_WHISPER_COMPUTE_TYPE=int8` و`segment` لتقليل الزمن. أما تشغيل Fasih فيحتاج نقل مرحلة الدبلجة نفسها إلى Kaggle GPU، وهو مسار مختلف عن هذا التصميم.
 
 ### المراجع
 
-[1]: https://www.kaggle.com/docs/api — Kaggle Public API and authentication  
-[2]: https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md — Kaggle Kernel metadata  
-[3]: https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels.md — Kaggle Kernel push and accelerator options
+[1]: https://www.kaggle.com/settings/api — Kaggle API token settings
+[2]: https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels.md — Kaggle Kernel push, status, and output
+[3]: https://github.com/dhiyaddineb-hue/DBYT/actions/workflows/one-click-gpu-dubbing.yml — Workflow in DBYT

@@ -1,10 +1,10 @@
-name: One-click GPU dubbing
+name: One-click YouTube to GitHub dubbing
 
 on:
   workflow_dispatch:
     inputs:
       source_url:
-        description: "Public direct video URL, GitHub Release asset URL, or YouTube URL"
+        description: "YouTube URL or public direct video URL"
         required: true
         type: string
       target_language:
@@ -17,63 +17,42 @@ on:
         required: true
         default: "dbyt-project"
         type: string
-      tts_engine:
-        description: "Arabic voice engine; Fasih uses Kaggle GPU when configured"
-        required: true
-        default: "fasih"
-        type: choice
-        options:
-          - fasih
-          - sherpa
       whisper_model:
-        description: "Whisper model; tiny/base are faster on CPU"
+        description: "Whisper model for GitHub CPU dubbing"
         required: true
-        default: "small"
+        default: "tiny"
         type: choice
         options:
           - tiny
           - base
           - small
-      granularity:
-        description: "TTS unit size"
-        required: true
-        default: "segment"
-        type: choice
-        options:
-          - segment
-          - word
 
 permissions:
   contents: write
 
 env:
-  # KAGGLE_API_TOKEN is optional. If absent, the workflow uses the local
-  # GitHub CPU fallback with Sherpa instead of failing at configuration.
-  KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-  KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
-  YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-  DBYT_COBALT_URL: ${{ secrets.COBALT_API_URL }}
-  DBYT_COBALT_API_KEY: ${{ secrets.COBALT_API_KEY }}
-  DBYT_INVIDIOUS_INSTANCES: ${{ secrets.INVIDIOUS_INSTANCES }}
-  DBYT_YOUTUBE_PROXIES: ${{ secrets.YOUTUBE_PROXIES }}
   SOURCE_URL: ${{ inputs.source_url }}
   TARGET_LANGUAGE: ${{ inputs.target_language }}
   PROJECT_NAME: ${{ inputs.project_name }}
-  TTS_ENGINE: ${{ inputs.tts_engine }}
   WHISPER_MODEL: ${{ inputs.whisper_model }}
-  GRANULARITY: ${{ inputs.granularity }}
+  KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+  KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
   DBYT_REPOSITORY: ${{ github.repository }}
   DBYT_REF: ${{ github.sha }}
-  DBYT_COBALT_BROWSER: "0"
 
 concurrency:
-  group: dbyt-one-click-gpu-${{ github.repository }}
+  group: dbyt-youtube-to-github-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  dub:
+  download-on-kaggle:
+    name: Download source on Kaggle
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 150
+    outputs:
+      source_asset_api_url: ${{ steps.publish_source.outputs.source_asset_api_url }}
+      source_release_id: ${{ steps.publish_source.outputs.source_release_id }}
+      source_release_tag: ${{ steps.publish_source.outputs.source_release_tag }}
     steps:
       - name: Check out DBYT
         uses: actions/checkout@v4
@@ -82,101 +61,63 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
-      - name: Validate configuration and select route
+      - name: Validate Kaggle authentication
         run: |
           set -euo pipefail
+          test -n "${KAGGLE_API_TOKEN:-}" || {
+            echo "Missing repository secret KAGGLE_API_TOKEN. Add it once from https://www.kaggle.com/settings/api."
+            exit 1
+          }
           [[ "$SOURCE_URL" =~ ^https?:// ]] || { echo "source_url must be an http(s) URL"; exit 1; }
-          safe_project="$(printf '%s' "$PROJECT_NAME" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^[.-]*//; s/[.-]*$//' | cut -c1-80)"
-          safe_project="${safe_project:-dbyt-project}"
-          echo "PROJECT_NAME=$safe_project" >> "$GITHUB_ENV"
-          if [ -n "${KAGGLE_API_TOKEN:-}" ]; then
-            echo "RUNNER_MODE=kaggle" >> "$GITHUB_ENV"
-            echo "GPU route selected: Kaggle GPU will run the dubbing."
-          else
-            echo "RUNNER_MODE=github-cpu" >> "$GITHUB_ENV"
-            echo "TTS_ENGINE=sherpa" >> "$GITHUB_ENV"
-            echo "DBYT_DEFAULT_ENGINE=sherpa" >> "$GITHUB_ENV"
-            echo "DBYT_WHISPER_DEVICE=cpu" >> "$GITHUB_ENV"
-            echo "DBYT_WHISPER_COMPUTE_TYPE=int8" >> "$GITHUB_ENV"
-            if [ "$WHISPER_MODEL" = "small" ]; then
-              echo "WHISPER_MODEL=tiny" >> "$GITHUB_ENV"
-              echo "DBYT_WHISPER_MODEL=tiny" >> "$GITHUB_ENV"
-              echo "Kaggle token is absent; switching CPU fallback Whisper from small to tiny."
-            else
-              echo "DBYT_WHISPER_MODEL=$WHISPER_MODEL" >> "$GITHUB_ENV"
-            fi
-            echo "Kaggle token is absent; using GitHub CPU fallback with offline Sherpa TTS."
-          fi
 
       - name: Install Kaggle CLI
-        run: |
-          set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            echo "Skipping Kaggle CLI because the CPU fallback route is active."
-            exit 0
-          fi
-          python -m pip install --upgrade pip kaggle
+        run: python -m pip install --upgrade pip kaggle
 
       - name: Resolve Kaggle kernel id
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            exit 0
-          fi
           kernel_id="${KAGGLE_KERNEL_ID:-}"
           if [ -z "$kernel_id" ]; then
-            echo "KAGGLE_KERNEL_ID is not set; discovering the Kaggle username from personal Kernels..."
             kernel_refs="$(kaggle kernels list --mine --csv --page-size 1 2>/dev/null || true)"
             username="$(printf '%s\n' "$kernel_refs" | awk -F',' 'NR > 1 && $1 ~ /^[^,[:space:]]+\/[^,[:space:]]+$/ { split($1, parts, "/"); print parts[1]; exit }')"
             if [ -z "$username" ]; then
-              echo "Could not discover Kaggle username. Add optional secret KAGGLE_KERNEL_ID as kaggle_username/dbyt-one-click, then rerun."
+              echo "Kaggle username could not be discovered. Create one private Kaggle Kernel or add KAGGLE_KERNEL_ID=username/dbyt-download."
               exit 1
             fi
-            kernel_id="$username/dbyt-one-click"
+            kernel_id="$username/dbyt-download"
           fi
           if [[ ! "$kernel_id" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
-            echo "KAGGLE_KERNEL_ID must be kaggle_username/kernel-slug"
+            echo "KAGGLE_KERNEL_ID must be username/kernel-slug"
             exit 1
           fi
           echo "KAGGLE_KERNEL_ID=$kernel_id" >> "$GITHUB_ENV"
-          echo "Using Kaggle kernel id: $kernel_id"
+          echo "Using Kaggle download kernel: $kernel_id"
 
-      - name: Prepare private Kaggle GPU kernel
+      - name: Prepare download-only Kaggle kernel
         env:
-          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-kernel
+          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-download-kernel
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            exit 0
-          fi
-          python tools/build_kaggle_kernel.py
-          test -s "$KAGGLE_KERNEL_DIR/dbyt_one_click.py"
+          python tools/build_kaggle_download_kernel.py
+          test -s "$KAGGLE_KERNEL_DIR/dbyt_youtube_download.py"
           test -s "$KAGGLE_KERNEL_DIR/kernel-metadata.json"
 
-      - name: Start Kaggle T4 GPU run
+      - name: Start Kaggle download
         env:
-          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-kernel
+          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-download-kernel
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            exit 0
-          fi
-          mkdir -p "$RUNNER_TEMP/dbyt-status"
+          mkdir -p "$RUNNER_TEMP/dbyt-download-status"
           kaggle kernels push \
             --path "$KAGGLE_KERNEL_DIR" \
-            --accelerator NvidiaTeslaT4 \
             --timeout 7200 \
-            2>&1 | tee "$RUNNER_TEMP/dbyt-status/push.log"
+            2>&1 | tee "$RUNNER_TEMP/dbyt-download-status/push.log"
 
-      - name: Wait for Kaggle run
+      - name: Wait for Kaggle download
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            exit 0
-          fi
-          status_file="$RUNNER_TEMP/dbyt-status/status.log"
+          status_file="$RUNNER_TEMP/dbyt-download-status/status.log"
           final_status=""
           for attempt in $(seq 1 240); do
             status_output="$(kaggle kernels status "$KAGGLE_KERNEL_ID" 2>&1 || true)"
@@ -192,169 +133,161 @@ jobs:
             sleep 30
           done
           test "$final_status" = complete || {
-            echo "Kaggle run did not complete successfully within the wait window."
+            echo "Kaggle download did not complete successfully."
             exit 1
           }
 
-      - name: Download Kaggle output
+      - name: Download source from Kaggle output
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "kaggle" ]; then
-            exit 0
-          fi
-          rm -rf "$RUNNER_TEMP/dbyt-kaggle-output"
-          mkdir -p "$RUNNER_TEMP/dbyt-kaggle-output"
+          rm -rf "$RUNNER_TEMP/dbyt-download-output"
+          mkdir -p "$RUNNER_TEMP/dbyt-download-output"
           kaggle kernels output "$KAGGLE_KERNEL_ID" \
-            --path "$RUNNER_TEMP/dbyt-kaggle-output" \
+            --path "$RUNNER_TEMP/dbyt-download-output" \
             --force
-          video="$(find "$RUNNER_TEMP/dbyt-kaggle-output" -type f \( -iname '*.mp4' -o -iname '*.mp3' \) -print -quit)"
-          test -n "$video" || { echo "Kaggle completed without a dubbed media file."; exit 1; }
-          mkdir -p one-click-output
-          cp "$video" "one-click-output/$(basename "$video")"
-          find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'run.json' -exec cp {} one-click-output/run.json \;
-          find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'pipeline.log' -exec cp {} one-click-output/pipeline.log \;
-          ls -lh one-click-output
+          source_file="$(find "$RUNNER_TEMP/dbyt-download-output" -type f -name 'source.mp4' -print -quit)"
+          test -n "$source_file" || {
+            echo "Kaggle completed without source.mp4. Download diagnostics:"
+            find "$RUNNER_TEMP/dbyt-download-output" -maxdepth 2 -type f -ls || true
+            exit 1
+          }
+          mkdir -p source-handoff
+          cp "$source_file" source-handoff/source.mp4
+          find "$RUNNER_TEMP/dbyt-download-output" -type f -name 'run.json' -exec cp {} source-handoff/download.json \;
+          find "$RUNNER_TEMP/dbyt-download-output" -type f -name 'download.log' -exec cp {} source-handoff/download.log \;
+          ffprobe -v error -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 source-handoff/source.mp4
 
-      - name: Install GitHub CPU fallback runtime
+      - name: Publish source to GitHub Release
+        id: publish_source
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "github-cpu" ]; then
-            exit 0
-          fi
+          tag="dbyt-source-${GITHUB_RUN_ID}"
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "DBYT source ${GITHUB_RUN_NUMBER}" \
+            --notes "Source downloaded automatically on Kaggle from the workflow input URL. The next job will process source.mp4." \
+            source-handoff/*
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+          release_id="$(printf '%s' "$release_json" | jq -r '.id')"
+          asset_api_url="$(printf '%s' "$release_json" | jq -r '.assets[] | select(.name == "source.mp4") | .url')"
+          test -n "$release_id" -a "$release_id" != null
+          test -n "$asset_api_url" -a "$asset_api_url" != null
+          echo "source_asset_api_url=$asset_api_url" >> "$GITHUB_OUTPUT"
+          echo "source_release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "source_release_tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Source handoff published to GitHub Release: $tag"
+
+      - name: Upload download diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbyt-download-${{ github.run_id }}
+          path: |
+            source-handoff
+            ${{ runner.temp }}/dbyt-download-status
+            ${{ runner.temp }}/dbyt-download-kernel
+          if-no-files-found: warn
+          retention-days: 7
+
+  dub-on-github:
+    name: Dub source on GitHub CPU
+    needs: download-on-kaggle
+    if: needs.download-on-kaggle.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      ASSET_API_URL: ${{ needs.download-on-kaggle.outputs.source_asset_api_url }}
+      SOURCE_RELEASE_ID: ${{ needs.download-on-kaggle.outputs.source_release_id }}
+      SOURCE_RELEASE_TAG: ${{ needs.download-on-kaggle.outputs.source_release_tag }}
+      DBYT_WHISPER_MODEL: ${{ inputs.whisper_model }}
+      DBYT_WHISPER_DEVICE: cpu
+      DBYT_WHISPER_COMPUTE_TYPE: int8
+      DBYT_DEFAULT_ENGINE: sherpa
+    steps:
+      - name: Check out DBYT
+        uses: actions/checkout@v4
+
+      - name: Install media and Python dependencies
+        run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          export DENO_INSTALL="$RUNNER_TEMP/deno"
-          export CI=1
-          curl -fsSL https://deno.land/install.sh | sh
-          test -x "$DENO_INSTALL/bin/deno"
-          echo "DENO_PATH=$DENO_INSTALL/bin/deno" >> "$GITHUB_ENV"
-          echo "$DENO_INSTALL/bin" >> "$GITHUB_PATH"
 
-      - name: Prepare source for GitHub CPU fallback
+      - name: Download source handoff from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "github-cpu" ]; then
-            exit 0
-          fi
           mkdir -p workspace/incoming
-          if [[ "$SOURCE_URL" =~ ^https://(www\.)?(youtube\.com|youtu\.be)/ ]]; then
-            cookies_args=()
-            if [ -n "${YOUTUBE_COOKIES:-}" ]; then
-              umask 077
-              cookie_file="$RUNNER_TEMP/youtube-cookies.txt"
-              printf '%s\n' "$YOUTUBE_COOKIES" > "$cookie_file"
-              cookies_args=(--cookies "$cookie_file")
-              echo "YouTube cookies enabled for CPU downloader; value hidden."
-            fi
-            download_ok=false
-            for cookie_mode in with without; do
-              if [ "$cookie_mode" = with ] && [ "${#cookies_args[@]}" -eq 0 ]; then
-                continue
-              fi
-              for format_value in \
-                'bv*[height<=720]+ba/b[height<=720]/best' \
-                'best'; do
-                rm -f workspace/incoming/source.*
-                command=(yt-dlp --ignore-config --no-playlist --retries 5 --fragment-retries 5
-                  --socket-timeout 30 --js-runtimes "deno:$DENO_PATH"
-                  --remote-components ejs:github --merge-output-format mp4)
-                if [ "$cookie_mode" = with ]; then
-                  command+=("${cookies_args[@]}")
-                fi
-                command+=(--format "$format_value" --output 'workspace/incoming/source.%(ext)s' "$SOURCE_URL")
-                echo "yt-dlp attempt cookies=$cookie_mode format=$format_value"
-                if "${command[@]}"; then
-                  download_ok=true
-                  break 2
-                fi
-              done
-            done
-            test "$download_ok" = true || true
-            source_file="$(find workspace/incoming -maxdepth 1 -type f \( -iname 'source.mp4' -o -iname 'source.mkv' -o -iname 'source.webm' \) -print -quit)"
-            if [ -n "$source_file" ]; then
-              echo "DBYT_CPU_INPUT=$source_file" >> "$GITHUB_ENV"
-              echo "DBYT_CPU_INPUT_IS_URL=false" >> "$GITHUB_ENV"
-            elif [ -n "${DBYT_COBALT_URL:-}" ] || [ -n "${DBYT_INVIDIOUS_INSTANCES:-}" ] || [ -n "${DBYT_YOUTUBE_PROXIES:-}" ]; then
-              echo "yt-dlp was blocked; handing the YouTube URL to the configured downloader fallbacks."
-              echo "DBYT_CPU_INPUT=$SOURCE_URL" >> "$GITHUB_ENV"
-              echo "DBYT_CPU_INPUT_IS_URL=true" >> "$GITHUB_ENV"
-            else
-              echo "YouTube is blocking this GitHub IP and no fallback downloader is configured. Use a public GitHub Release asset URL, or add an authorized Cobalt/Invidious/proxy Secret."
-              exit 1
-            fi
-          else
-            curl --fail --location --retry 3 \
-              -A 'DBYT-one-click/1.0' "$SOURCE_URL" \
-              -o workspace/incoming/source.mp4
-            test -s workspace/incoming/source.mp4
-            echo "DBYT_CPU_INPUT=workspace/incoming/source.mp4" >> "$GITHUB_ENV"
-            echo "DBYT_CPU_INPUT_IS_URL=false" >> "$GITHUB_ENV"
-          fi
-          if [ "${DBYT_CPU_INPUT_IS_URL:-false}" = "false" ]; then
-            ffprobe -v error -show_entries format=duration,size \
-              -of default=noprint_wrappers=1 "$DBYT_CPU_INPUT"
-          else
-            echo "Source will be downloaded by the configured DBYT fallback route during the pipeline."
-          fi
+          curl --fail --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$ASSET_API_URL" -o workspace/incoming/source.mp4
+          test -s workspace/incoming/source.mp4
+          ffprobe -v error -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 workspace/incoming/source.mp4
 
-      - name: Run GitHub CPU fallback
+      - name: Run DBYT dubbing on GitHub CPU
         run: |
           set -euo pipefail
-          if [ "$RUNNER_MODE" != "github-cpu" ]; then
-            exit 0
-          fi
-          python -u -m backend.cli "$DBYT_CPU_INPUT" \
+          safe_project="$(printf '%s' "$PROJECT_NAME" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^[.-]*//; s/[.-]*$//' | cut -c1-80)"
+          safe_project="${safe_project:-dbyt-project}"
+          python -u -m backend.cli workspace/incoming/source.mp4 \
             --target-language "$TARGET_LANGUAGE" \
-            --engine "$TTS_ENGINE" \
-            --project-name "$PROJECT_NAME" \
+            --engine sherpa \
+            --project-name "$safe_project" \
             --keep-background true \
             --preserve-emotions true \
             --granularity segment \
             --lip-sync false \
             --output-dir workspace/output
           video="$(find workspace/output -type f \( -iname '*.mp4' -o -iname '*.mp3' \) -print -quit)"
-          test -n "$video" || { echo "GitHub CPU pipeline completed without a media file."; exit 1; }
-          mkdir -p one-click-output
-          cp "$video" "one-click-output/$(basename "$video")"
-          cat > one-click-output/run.json <<EOF
+          test -n "$video" || { echo "DBYT completed without a dubbed media file."; exit 1; }
+          mkdir -p final-output
+          cp "$video" "final-output/$(basename "$video")"
+          cat > final-output/run.json <<EOF
           {
-            "route": "github-cpu",
-            "requested_engine": "${{ inputs.tts_engine }}",
-            "selected_engine": "${TTS_ENGINE}",
+            "route": "kaggle-download-to-github-cpu-dub",
             "target_language": "${TARGET_LANGUAGE}",
-            "whisper_model": "${WHISPER_MODEL}",
+            "whisper_model": "${DBYT_WHISPER_MODEL}",
+            "whisper_device": "${DBYT_WHISPER_DEVICE}",
+            "whisper_compute_type": "${DBYT_WHISPER_COMPUTE_TYPE}",
+            "engine": "sherpa",
             "granularity": "segment"
           }
           EOF
-          cp workspace/logs/* one-click-output/ 2>/dev/null || true
-          ls -lh one-click-output
 
-      - name: Publish result to GitHub Release
+      - name: Publish dubbed result and remove source handoff
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -d one-click-output && find one-click-output -type f -print -quit >/dev/null
           tag="dbyt-result-${GITHUB_RUN_ID}"
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "DBYT result ${GITHUB_RUN_NUMBER}" \
-            --notes "One-click DBYT run. Route=${RUNNER_MODE}; Engine=${TTS_ENGINE}; language=${TARGET_LANGUAGE}; Whisper=${WHISPER_MODEL}; granularity=segment." \
-            one-click-output/*
-          echo "Release published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
+            --notes "Kaggle downloaded the source automatically; GitHub CPU completed DBYT dubbing with Sherpa." \
+            final-output/*
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$SOURCE_RELEASE_ID"
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$SOURCE_RELEASE_TAG" || true
+          echo "Dubbed result published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
 
-      - name: Upload diagnostics as Actions artifact
+      - name: Upload dubbing diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dbyt-one-click-${{ github.run_id }}
+          name: dbyt-dubbing-${{ github.run_id }}
           path: |
-            one-click-output
+            final-output
             workspace/logs
-            ${{ runner.temp }}/dbyt-status
-            ${{ runner.temp }}/dbyt-kernel
           if-no-files-found: warn
           retention-days: 7
