@@ -83,7 +83,7 @@ jobs:
           test -n "$KAGGLE_API_TOKEN" || { echo "Missing repository secret KAGGLE_API_TOKEN"; exit 1; }
           python - <<'PY'
           import os, re
-          if not re.fullmatch(r"[^/\\s]+/[^/\\s]+", os.environ["KAGGLE_KERNEL_ID"]):
+          if not re.fullmatch(r"[^/\s]+/[^/\s]+", os.environ["KAGGLE_KERNEL_ID"]):
               raise SystemExit("KAGGLE_KERNEL_ID must be kaggle_username/kernel-slug")
           if not os.environ["SOURCE_URL"].startswith(("https://", "http://")):
               raise SystemExit("source_url must be an http(s) URL")
@@ -148,7 +148,7 @@ jobs:
           video="$(find "$RUNNER_TEMP/dbyt-kaggle-output" -type f \\( -iname '*.mp4' -o -iname '*.mp3' \\) -print -quit)"
           test -n "$video" || { echo "Kaggle completed without a dubbed media file."; exit 1; }
           mkdir -p one-click-output
-          cp "$video" "one-click-output/${PROJECT_NAME}$(basename "$video" | sed 's/.*\\././')"
+          cp "$video" "one-click-output/$(basename "$video")"
           find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'run.json' -exec cp {} one-click-output/run.json \\;
           find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'pipeline.log' -exec cp {} one-click-output/pipeline.log \\;
           ls -lh one-click-output

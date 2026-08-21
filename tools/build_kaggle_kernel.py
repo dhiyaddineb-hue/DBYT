@@ -27,12 +27,15 @@ def main() -> None:
     if not re.fullmatch(r"[^/\s]+/[^/\s]+", required["KAGGLE_KERNEL_ID"]):
         raise SystemExit("KAGGLE_KERNEL_ID must use the form kaggle_username/kernel-slug")
 
+    raw_project_name = os.environ.get("PROJECT_NAME", "dbyt-project")
+    safe_project_name = re.sub(r"[^A-Za-z0-9._-]+", "-", raw_project_name).strip(".-")[:80]
+    safe_project_name = safe_project_name or "dbyt-project"
     values = {
         "JOB_SOURCE_URL_B64": required["SOURCE_URL"],
         "JOB_REPOSITORY_B64": os.environ.get("DBYT_REPOSITORY", "dhiyaddineb-hue/DBYT"),
         "JOB_REF_B64": os.environ.get("DBYT_REF", "main"),
         "JOB_TARGET_LANGUAGE_B64": os.environ.get("TARGET_LANGUAGE", "ar"),
-        "JOB_PROJECT_NAME_B64": os.environ.get("PROJECT_NAME", "dbyt-project"),
+        "JOB_PROJECT_NAME_B64": safe_project_name,
         "JOB_ENGINE_B64": os.environ.get("TTS_ENGINE", "fasih"),
         "JOB_GRANULARITY_B64": os.environ.get("GRANULARITY", "segment"),
         "JOB_WHISPER_MODEL_B64": os.environ.get("WHISPER_MODEL", "small"),

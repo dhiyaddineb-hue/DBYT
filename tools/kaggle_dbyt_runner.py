@@ -88,11 +88,20 @@ def _install_runtime() -> None:
         "soundfile",
         "huggingface_hub",
         "numpy<2",
-        "coqui-tts==0.27.5",
-        "transformers==5.0.0",
     ]
     _run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "--upgrade-strategy", "eager", *packages])
     _run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "sherpa-onnx==1.13.6"])
+    if REQUESTED_ENGINE == "fasih":
+        fasih_result = _run(
+            [
+                sys.executable, "-m", "pip", "install", "-q", "--upgrade",
+                "--upgrade-strategy", "eager", "coqui-tts==0.27.5", "transformers==5.0.0",
+            ],
+            log=LOG_PATH,
+            check=False,
+        )
+        if fasih_result.returncode != 0:
+            print("Fasih dependencies could not be installed; Sherpa fallback will be used.", flush=True)
 
 
 def _download_url(url: str, destination: Path) -> Path:
