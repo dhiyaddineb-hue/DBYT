@@ -15,7 +15,7 @@
 
 لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا. يحاول Workflow اكتشاف اسم مستخدم Kaggle تلقائيًا من Kernels الخاصة بالحساب، ثم يستخدم `username/dbyt-one-click`. إذا لم يكن للحساب أي Kernel سابق ولم يستطع Workflow اكتشاف اسم المستخدم، أضف `KAGGLE_KERNEL_ID` اختياريًا. عدم وجود هذه الأسرار لا يمنع التشغيل؛ يختار Workflow مسار GitHub CPU تلقائيًا. [1] [2]
 
-إذا كان المصدر رابط YouTube ويحتاج إلى cookies، أضف Secret باسم `YOUTUBE_COOKIES` داخل Notebook/حساب Kaggle، وليس داخل GitHub أو الكود. يمكن تشغيل الروتين دون cookies، لكن YouTube قد يحجب الشبكة.
+إذا كان المصدر رابط YouTube ويحتاج إلى cookies، أضف Secret باسم `YOUTUBE_COOKIES` في GitHub Actions أو داخل حساب Kaggle، وليس داخل الكود. يجب أن يكون ملف cookies حديثًا؛ إذا ظهر في السجل `cookies are no longer valid` فلا تعاد المحاولة بالملف نفسه. يجرب Workflow أولًا cookies ثم بدونها، وبعد ذلك يستخدم فقط مسارات fallback التي يصرّح بها المشغل عبر `COBALT_API_URL`/`COBALT_API_KEY` أو `INVIDIOUS_INSTANCES` أو `YOUTUBE_PROXIES`. إذا لم تتوفر هذه المسارات وحجبت YouTube شبكة GitHub، استخدم رابط GitHub Release مباشر للفيديو؛ هذا هو المسار الأكثر ثباتًا.
 
 ## التشغيل المتكرر
 
