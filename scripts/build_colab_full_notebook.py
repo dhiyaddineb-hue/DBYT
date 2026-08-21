@@ -105,6 +105,7 @@ code("""#@title 2) الإعدادات والأسرار
 VIDEO_URL = "https://www.youtube.com/watch?v=CAwRm-VO-kU"  #@param {type:"string"}
 TARGET_LANGUAGE = "ar"  #@param ["ar", "en", "fr", "es", "de", "tr"]
 TTS_ENGINE = "fasih"  #@param ["fasih", "sherpa"]
+AUTO_FALLBACK_TO_SHERPA = True  #@param {type:"boolean"}
 GRANULARITY = "segment"  #@param ["segment", "word"]
 KEEP_BACKGROUND = True  #@param {type:"boolean"}
 PROJECT_NAME = ""  #@param {type:"string"}
@@ -149,14 +150,14 @@ if not re.match(r'https://(www\\.)?youtube\\.com/|https://youtu\\.be/', VIDEO_UR
 if TTS_ENGINE == 'fasih' and TARGET_LANGUAGE != 'ar':
     raise ValueError('Fasih-TTS-V1 مخصص للعربية الفصحى؛ اختر ar أو استخدم Sherpa.')
 
-# Install only the selected TTS backend. Fasih 0.27.5 currently needs
-# transformers 5.0.0: transformers 5.1+ removed isin_mps_friendly.
-tts_packages = ['coqui-tts==0.27.5', 'transformers==5.0.0'] if TTS_ENGINE == 'fasih' else ['sherpa-onnx==1.13.6']
-subprocess.run([
-    sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', '--upgrade-strategy', 'eager', *tts_packages,
-], check=True)
+# Fasih uses coqui-tts 0.27.5. Colab can retain an incompatible Transformers
+# module after pip installation, so test it now and fall back to Sherpa if needed.
 if TTS_ENGINE == 'fasih':
     try:
+        subprocess.run([
+            sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', '--upgrade-strategy', 'eager',
+            'coqui-tts==0.27.5', 'transformers==5.0.0',
+        ], check=True)
         import torch
         import transformers
         import transformers.pytorch_utils as _pt_utils
@@ -172,7 +173,14 @@ if TTS_ENGINE == 'fasih':
         from TTS.api import TTS as _FasihTTS
         print(f'✅ Fasih compatibility check: coqui-tts 0.27.5 + transformers {transformers.__version__}', flush=True)
     except Exception as exc:
-        raise RuntimeError(f'Fasih import failed after compatibility setup. transformers={globals().get("transformers", "unknown")}') from exc
+        if not AUTO_FALLBACK_TO_SHERPA:
+            raise RuntimeError(f'Fasih import failed after compatibility setup: {exc}') from exc
+        print(f'⚠️ Fasih unavailable in this Colab runtime ({type(exc).__name__}); switching automatically to Sherpa.', flush=True)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', 'sherpa-onnx==1.13.6'], check=True)
+        TTS_ENGINE = 'sherpa'
+        print('✅ Automatic fallback selected: Sherpa-ONNX', flush=True)
+else:
+    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', 'sherpa-onnx==1.13.6'], check=True)
 try:
     import torch
     has_gpu = bool(torch.cuda.is_available())
