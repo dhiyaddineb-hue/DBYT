@@ -26,7 +26,7 @@ def code(source: str) -> None:
 
 md("""# DBYT — الدبلجة الكاملة داخل Google Colab
 
-> **إصدار Notebook: `2026.08.21-02`** — افتح هذه النسخة ولا تستخدم نسخة أقدم محفوظة في Colab.
+> **إصدار Notebook: `2026.08.21-03`** — افتح هذه النسخة ولا تستخدم نسخة أقدم محفوظة في Colab.
 
 هذا هو المسار الرئيسي الجديد لـ DBYT:
 
@@ -43,8 +43,8 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 شغّل الخلايا بالترتيب. خزّن مفتاح GitHub في Colab Secret باسم `DBYT_COLAB_TOKEN` ولا تكتبه داخل أي خلية.
 """)
 
-code("""#@title 1) تثبيت الأدوات الأساسية — DBYT Notebook v2026.08.21-02
-NOTEBOOK_VERSION = '2026.08.21-02'
+code("""#@title 1) تثبيت الأدوات الأساسية — DBYT Notebook v2026.08.21-03
+NOTEBOOK_VERSION = '2026.08.21-03'
 print(f'🧩 DBYT Colab Notebook version: {NOTEBOOK_VERSION}', flush=True)
 
 import sys, shutil, subprocess
