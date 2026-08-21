@@ -224,11 +224,29 @@ for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
     if attempt < len(attempts):
         time.sleep(min(30, 5 * attempt))
 else:
-    raise RuntimeError(f'yt-dlp failed for every YouTube client/format attempt. Last error:\\n{last_error[-6000:]}')
+    print('❌ YouTube download failed. This Colab network is blocked by YouTube.', flush=True)
+    print('⬆️ Upload fallback: choose the original video file from your computer to continue dubbing.', flush=True)
+    try:
+        from google.colab import files
+        uploaded = files.upload()
+    except Exception as exc:
+        raise RuntimeError(f'YouTube download failed and Colab upload fallback is unavailable. Last error:\\n{last_error[-6000:]}') from exc
+    video_extensions = {'.mp4', '.mkv', '.mov', '.avi', '.webm', '.m4v'}
+    uploaded_name = next((name for name in uploaded if Path(name).suffix.lower() in video_extensions), None)
+    if not uploaded_name:
+        raise RuntimeError('لم يتم رفع ملف فيديو/صوت صالح. ارفع MP4 أو MKV أو MOV أو WebM ثم أعد الخلية 3.')
+    uploaded_path = WORK_DIR / Path(uploaded_name).name
+    uploaded_path.write_bytes(uploaded[uploaded_name])
+    if uploaded_path.suffix.lower() == '.mp4':
+        source_path = uploaded_path
+    else:
+        source_path = WORK_DIR / 'source.mp4'
+        subprocess.run(['ffmpeg', '-y', '-i', str(uploaded_path), '-c:v', 'libx264', '-c:a', 'aac', str(source_path)], check=True)
+    print(f'✅ Uploaded source selected: {source_path}', flush=True)
 
-candidates = sorted(WORK_DIR.glob('source.*'))
+candidates = [source_path] if source_path.exists() else sorted(WORK_DIR.glob('source.*'))
 if not candidates:
-    raise FileNotFoundError('yt-dlp انتهى دون ملف مصدر')
+    raise FileNotFoundError('لم يتم العثور على ملف مصدر بعد التنزيل أو الرفع')
 source_path = WORK_DIR / 'source.mp4' if (WORK_DIR / 'source.mp4').exists() else candidates[0]
 if source_path.suffix.lower() != '.mp4':
     converted = WORK_DIR / 'source.mp4'
