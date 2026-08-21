@@ -100,7 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           python tools/build_kaggle_download_kernel.py
-          test -s "$KAGGLE_KERNEL_DIR/dbyt_youtube_download.py"
+          test -s "$KAGGLE_KERNEL_DIR/dbyt_youtube_download.ipynb"
           test -s "$KAGGLE_KERNEL_DIR/kernel-metadata.json"
 
       - name: Start Kaggle download
