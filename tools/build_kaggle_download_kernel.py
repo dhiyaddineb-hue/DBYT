@@ -61,7 +61,7 @@ def main() -> None:
     )
     metadata = {
         "id": kernel_id,
-        "title": "DBYT Download",
+        "title": "DBYT Youtube Download",
         "code_file": "dbyt_youtube_download.ipynb",
         "language": "python",
         "kernel_type": "notebook",
