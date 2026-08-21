@@ -42,6 +42,10 @@ env:
   RELEASE_ID: ${{ github.event.client_payload.release_id || inputs.release_id }}
   RELEASE_TAG: ${{ github.event.client_payload.release_tag || inputs.release_tag }}
   DBYT_COBALT_BROWSER: "0"
+  DBYT_DEFAULT_ENGINE: "sherpa"
+  DBYT_WHISPER_MODEL: "tiny"
+  DBYT_WHISPER_DEVICE: "cpu"
+  DBYT_WHISPER_COMPUTE_TYPE: "int8"
   DBYT_WPC_BROWSER: /usr/bin/google-chrome
 
 jobs:
@@ -95,6 +99,7 @@ jobs:
             --target-language "$TARGET_LANGUAGE" \
             --engine sherpa \
             --project-name "$PROJECT_NAME" \
+            --granularity segment \
             --output-dir workspace/output
 
       - name: Remove temporary source before commit

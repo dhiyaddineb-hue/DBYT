@@ -145,30 +145,34 @@ def _download_youtube(url: str, destination: Path) -> Path:
     if cookies:
         cookies_path.write_text(cookies, encoding="utf-8")
 
-    attempts = [
+    format_attempts = [
         ["--format", "bv*[height<=720]+ba/b[height<=720]/best"],
         [],
     ]
+    cookie_attempts = [cookies_path, None] if cookies_path.is_file() else [None]
     last_error = ""
-    for index, format_args in enumerate(attempts, start=1):
-        for old in SOURCE_DIR.glob("source.*"):
-            old.unlink(missing_ok=True)
-        command = [
-            "yt-dlp", "--ignore-config", "--no-playlist", "--retries", "5",
-            "--fragment-retries", "5", "--socket-timeout", "30",
-            "--js-runtimes", f"deno:{deno}", "--remote-components", "ejs:github",
-            "--merge-output-format", "mp4",
-        ]
-        if cookies_path.is_file():
-            command += ["--cookies", str(cookies_path)]
-        command += format_args + ["--output", str(SOURCE_DIR / "source.%(ext)s"), url]
-        print(f"[2/6] YouTube download attempt {index}/{len(attempts)}", flush=True)
-        completed = _run(command, log=LOG_PATH, check=False)
-        if completed.returncode == 0:
-            candidates = sorted(SOURCE_DIR.glob("source.*"))
-            if candidates:
-                return candidates[0]
-        last_error = f"yt-dlp attempt {index} failed with exit code {completed.returncode}"
+    attempt_number = 0
+    for cookie_option in cookie_attempts:
+        for format_args in format_attempts:
+            attempt_number += 1
+            for old in SOURCE_DIR.glob("source.*"):
+                old.unlink(missing_ok=True)
+            command = [
+                "yt-dlp", "--ignore-config", "--no-playlist", "--retries", "5",
+                "--fragment-retries", "5", "--socket-timeout", "30",
+                "--js-runtimes", f"deno:{deno}", "--remote-components", "ejs:github",
+                "--merge-output-format", "mp4",
+            ]
+            if cookie_option is not None:
+                command += ["--cookies", str(cookie_option)]
+            command += format_args + ["--output", str(SOURCE_DIR / "source.%(ext)s"), url]
+            print(f"[2/6] YouTube download attempt {attempt_number}/4 cookies={'yes' if cookie_option else 'no'}", flush=True)
+            completed = _run(command, log=LOG_PATH, check=False)
+            if completed.returncode == 0:
+                candidates = sorted(SOURCE_DIR.glob("source.*"))
+                if candidates:
+                    return candidates[0]
+            last_error = f"yt-dlp attempt {attempt_number} failed with exit code {completed.returncode}"
     raise RuntimeError(last_error or "yt-dlp could not download the YouTube source.")
 
 

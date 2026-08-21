@@ -244,17 +244,30 @@ jobs:
               cookies_args=(--cookies "$cookie_file")
               echo "YouTube cookies enabled for CPU downloader; value hidden."
             fi
-            for format_args in \
-              "--format bv*[height<=720]+ba/b[height<=720]/best" \
-              "--format best"; do
-              rm -f workspace/incoming/source.*
-              # shellcheck disable=SC2086
-              yt-dlp --ignore-config --no-playlist --retries 5 --fragment-retries 5 \
-                --socket-timeout 30 --js-runtimes "deno:$DENO_PATH" \
-                --remote-components ejs:github --merge-output-format mp4 \
-                "${cookies_args[@]}" $format_args \
-                --output 'workspace/incoming/source.%(ext)s' "$SOURCE_URL" && break || true
+            download_ok=false
+            for cookie_mode in with without; do
+              if [ "$cookie_mode" = with ] && [ "${#cookies_args[@]}" -eq 0 ]; then
+                continue
+              fi
+              for format_value in \
+                'bv*[height<=720]+ba/b[height<=720]/best' \
+                'best'; do
+                rm -f workspace/incoming/source.*
+                command=(yt-dlp --ignore-config --no-playlist --retries 5 --fragment-retries 5
+                  --socket-timeout 30 --js-runtimes "deno:$DENO_PATH"
+                  --remote-components ejs:github --merge-output-format mp4)
+                if [ "$cookie_mode" = with ]; then
+                  command+=("${cookies_args[@]}")
+                fi
+                command+=(--format "$format_value" --output 'workspace/incoming/source.%(ext)s' "$SOURCE_URL")
+                echo "yt-dlp attempt cookies=$cookie_mode format=$format_value"
+                if "${command[@]}"; then
+                  download_ok=true
+                  break 2
+                fi
+              done
             done
+            test "$download_ok" = true || true
             source_file="$(find workspace/incoming -maxdepth 1 -type f \( -iname 'source.mp4' -o -iname 'source.mkv' -o -iname 'source.webm' \) -print -quit)"
             test -n "$source_file" || { echo "YouTube download failed on GitHub CPU."; exit 1; }
             echo "DBYT_CPU_INPUT=$source_file" >> "$GITHUB_ENV"
