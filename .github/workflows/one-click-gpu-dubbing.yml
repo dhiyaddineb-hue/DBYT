@@ -52,6 +52,10 @@ env:
   KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
   KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
   YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+  DBYT_COBALT_URL: ${{ secrets.COBALT_API_URL }}
+  DBYT_COBALT_API_KEY: ${{ secrets.COBALT_API_KEY }}
+  DBYT_INVIDIOUS_INSTANCES: ${{ secrets.INVIDIOUS_INSTANCES }}
+  DBYT_YOUTUBE_PROXIES: ${{ secrets.YOUTUBE_PROXIES }}
   SOURCE_URL: ${{ inputs.source_url }}
   TARGET_LANGUAGE: ${{ inputs.target_language }}
   PROJECT_NAME: ${{ inputs.project_name }}
@@ -269,17 +273,31 @@ jobs:
             done
             test "$download_ok" = true || true
             source_file="$(find workspace/incoming -maxdepth 1 -type f \( -iname 'source.mp4' -o -iname 'source.mkv' -o -iname 'source.webm' \) -print -quit)"
-            test -n "$source_file" || { echo "YouTube download failed on GitHub CPU."; exit 1; }
-            echo "DBYT_CPU_INPUT=$source_file" >> "$GITHUB_ENV"
+            if [ -n "$source_file" ]; then
+              echo "DBYT_CPU_INPUT=$source_file" >> "$GITHUB_ENV"
+              echo "DBYT_CPU_INPUT_IS_URL=false" >> "$GITHUB_ENV"
+            elif [ -n "${DBYT_COBALT_URL:-}" ] || [ -n "${DBYT_INVIDIOUS_INSTANCES:-}" ] || [ -n "${DBYT_YOUTUBE_PROXIES:-}" ]; then
+              echo "yt-dlp was blocked; handing the YouTube URL to the configured downloader fallbacks."
+              echo "DBYT_CPU_INPUT=$SOURCE_URL" >> "$GITHUB_ENV"
+              echo "DBYT_CPU_INPUT_IS_URL=true" >> "$GITHUB_ENV"
+            else
+              echo "YouTube is blocking this GitHub IP and no fallback downloader is configured. Use a public GitHub Release asset URL, or add an authorized Cobalt/Invidious/proxy Secret."
+              exit 1
+            fi
           else
             curl --fail --location --retry 3 \
               -A 'DBYT-one-click/1.0' "$SOURCE_URL" \
               -o workspace/incoming/source.mp4
             test -s workspace/incoming/source.mp4
             echo "DBYT_CPU_INPUT=workspace/incoming/source.mp4" >> "$GITHUB_ENV"
+            echo "DBYT_CPU_INPUT_IS_URL=false" >> "$GITHUB_ENV"
           fi
-          ffprobe -v error -show_entries format=duration,size \
-            -of default=noprint_wrappers=1 "$DBYT_CPU_INPUT"
+          if [ "${DBYT_CPU_INPUT_IS_URL:-false}" = "false" ]; then
+            ffprobe -v error -show_entries format=duration,size \
+              -of default=noprint_wrappers=1 "$DBYT_CPU_INPUT"
+          else
+            echo "Source will be downloaded by the configured DBYT fallback route during the pipeline."
+          fi
 
       - name: Run GitHub CPU fallback
         run: |
