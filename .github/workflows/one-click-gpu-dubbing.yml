@@ -127,6 +127,17 @@ jobs:
               break
             fi
             if printf '%s' "$status_output" | grep -Eiq 'error|failed|cancelled|canceled'; then
+              mkdir -p "$RUNNER_TEMP/dbyt-download-output"
+              kaggle kernels output "$KAGGLE_KERNEL_ID" \
+                --path "$RUNNER_TEMP/dbyt-download-output" \
+                --force 2>&1 || true
+              find "$RUNNER_TEMP/dbyt-download-output" -maxdepth 2 -type f -ls || true
+              for diagnostic in "$RUNNER_TEMP/dbyt-download-output"/*; do
+                if [ -f "$diagnostic" ]; then
+                  echo "===== Kaggle diagnostic: $(basename "$diagnostic") ====="
+                  tail -200 "$diagnostic" || true
+                fi
+              done
               final_status="failed"
               break
             fi
@@ -189,6 +200,7 @@ jobs:
           path: |
             source-handoff
             ${{ runner.temp }}/dbyt-download-status
+            ${{ runner.temp }}/dbyt-download-output
             ${{ runner.temp }}/dbyt-download-kernel
           if-no-files-found: warn
           retention-days: 7
