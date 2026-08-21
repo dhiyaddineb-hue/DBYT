@@ -1,6 +1,6 @@
 # DBYT — تشغيل الدبلجة بضغطة واحدة من GitHub
 
-يضيف Workflow `One-click GPU dubbing` زرًا واحدًا داخل GitHub Actions. بعد إعداد الأسرار مرة واحدة، يكتب المستخدم رابط الفيديو ويضغط **Run workflow** فقط. يرسل GitHub نسخة التشغيل إلى Kaggle GPU، وينتظر انتهاء الدبلجة، ثم ينشر `mp4` و`run.json` و`pipeline.log` في GitHub Release.
+يضيف Workflow `One-click GPU dubbing` زرًا واحدًا داخل GitHub Actions. يكتب المستخدم رابط الفيديو ويضغط **Run workflow** فقط. إذا كان `KAGGLE_API_TOKEN` موجودًا، يرسل GitHub نسخة التشغيل إلى Kaggle GPU؛ وإذا لم يكن موجودًا، يستخدم GitHub CPU تلقائيًا مع Whisper `tiny` وSherpa بدل التوقف بخطأ. في كلا المسارين ينشر `mp4` و`run.json` و`pipeline.log` في GitHub Release.
 
 ## الإعداد الأول فقط
 
@@ -10,10 +10,10 @@
 
 | الاسم | القيمة |
 |---|---|
-| `KAGGLE_API_TOKEN` | قيمة Kaggle API token فقط |
-| `KAGGLE_KERNEL_ID` | اختياري. أضفه فقط إذا لم يكن لديك Kernel شخصي سابق، بصيغة `your-kaggle-name/dbyt-one-click`. |
+| `KAGGLE_API_TOKEN` | اختياري. رمز Kaggle API من أجل تشغيل GPU وFasih. إذا غاب، يعمل المسار الاحتياطي على GitHub CPU مع Sherpa. |
+| `KAGGLE_KERNEL_ID` | اختياري، ويُستخدم فقط مع Kaggle GPU إذا لم يستطع Workflow اكتشاف Kernel الشخصي. |
 
-لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا. يحاول Workflow اكتشاف اسم مستخدم Kaggle تلقائيًا من Kernels الخاصة بالحساب، ثم يستخدم `username/dbyt-one-click`. إذا لم يكن للحساب أي Kernel سابق ولم يستطع Workflow اكتشاف اسم المستخدم، أضف `KAGGLE_KERNEL_ID` اختياريًا. [1] [2]
+لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا. يحاول Workflow اكتشاف اسم مستخدم Kaggle تلقائيًا من Kernels الخاصة بالحساب، ثم يستخدم `username/dbyt-one-click`. إذا لم يكن للحساب أي Kernel سابق ولم يستطع Workflow اكتشاف اسم المستخدم، أضف `KAGGLE_KERNEL_ID` اختياريًا. عدم وجود هذه الأسرار لا يمنع التشغيل؛ يختار Workflow مسار GitHub CPU تلقائيًا. [1] [2]
 
 إذا كان المصدر رابط YouTube ويحتاج إلى cookies، أضف Secret باسم `YOUTUBE_COOKIES` داخل Notebook/حساب Kaggle، وليس داخل GitHub أو الكود. يمكن تشغيل الروتين دون cookies، لكن YouTube قد يحجب الشبكة.
 
@@ -23,7 +23,7 @@
 
 `Actions → One-click GPU dubbing → Run workflow`
 
-ثم أدخل `source_url`. يمكن أن يكون الرابط رابط YouTube، أو رابطًا مباشرًا لملف فيديو عام، أو رابط GitHub Release asset عام. اختر `fasih` للعربية الفصحى، ثم اختر `small` للجودة الأعلى أو `base`/`tiny` للسرعة. بعد الضغط على **Run workflow**، لا تحتاج إلى فتح Kaggle أو تشغيل Notebook يدويًا.
+ثم أدخل `source_url`. يمكن أن يكون الرابط رابط YouTube، أو رابطًا مباشرًا لملف فيديو عام، أو رابط GitHub Release asset عام. اختر `fasih` للعربية الفصحى عند إعداد Kaggle GPU، ثم اختر `small` للجودة الأعلى أو `base`/`tiny` للسرعة. إذا لم يُضف `KAGGLE_API_TOKEN`، سيستبدل Workflow المحرك تلقائيًا بـ Sherpa ويستخدم Whisper `tiny` عند اختيار `small` حتى لا يتوقف التشغيل. بعد الضغط على **Run workflow**، لا تحتاج إلى فتح Kaggle أو تشغيل Notebook يدويًا.
 
 عند النجاح، يطبع سجل GitHub رابط Release النهائي بصيغة:
 
