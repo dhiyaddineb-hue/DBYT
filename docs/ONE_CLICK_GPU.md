@@ -4,16 +4,16 @@
 
 ## الإعداد الأول فقط
 
-أنشئ Kaggle API token من [Kaggle Account API](https://www.kaggle.com/settings/api)، ثم أضف Secretين في مستودع GitHub من:
+أنشئ Kaggle API token من [Kaggle Account API](https://www.kaggle.com/settings/api)، ثم أضف Secret المصادقة في مستودع GitHub من:
 
 `Settings → Secrets and variables → Actions → New repository secret`
 
 | الاسم | القيمة |
 |---|---|
 | `KAGGLE_API_TOKEN` | قيمة Kaggle API token فقط |
-| `KAGGLE_KERNEL_ID` | اسم حساب Kaggle متبوعًا بـ `/dbyt-one-click`، مثل `your-kaggle-name/dbyt-one-click` |
+| `KAGGLE_KERNEL_ID` | اختياري. أضفه فقط إذا لم يكن لديك Kernel شخصي سابق، بصيغة `your-kaggle-name/dbyt-one-click`. |
 
-لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا، ويحتاج Kernel إلى معرف بصيغة `username/kernel-slug`. [1] [2]
+لا تضع هذه القيم في ملفات المستودع. يستخدم Kaggle CLI متغير `KAGGLE_API_TOKEN` رسميًا. يحاول Workflow اكتشاف اسم مستخدم Kaggle تلقائيًا من Kernels الخاصة بالحساب، ثم يستخدم `username/dbyt-one-click`. إذا لم يكن للحساب أي Kernel سابق ولم يستطع Workflow اكتشاف اسم المستخدم، أضف `KAGGLE_KERNEL_ID` اختياريًا. [1] [2]
 
 إذا كان المصدر رابط YouTube ويحتاج إلى cookies، أضف Secret باسم `YOUTUBE_COOKIES` داخل Notebook/حساب Kaggle، وليس داخل GitHub أو الكود. يمكن تشغيل الروتين دون cookies، لكن YouTube قد يحجب الشبكة.
 

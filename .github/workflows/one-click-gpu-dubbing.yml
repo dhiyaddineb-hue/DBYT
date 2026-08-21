@@ -79,19 +79,33 @@ jobs:
       - name: Validate configuration
         run: |
           set -euo pipefail
-          test -n "$KAGGLE_KERNEL_ID" || { echo "Missing repository secret KAGGLE_KERNEL_ID"; exit 1; }
           test -n "$KAGGLE_API_TOKEN" || { echo "Missing repository secret KAGGLE_API_TOKEN"; exit 1; }
-          python - <<'PY'
-          import os, re
-          if not re.fullmatch(r"[^/\s]+/[^/\s]+", os.environ["KAGGLE_KERNEL_ID"]):
-              raise SystemExit("KAGGLE_KERNEL_ID must be kaggle_username/kernel-slug")
-          if not os.environ["SOURCE_URL"].startswith(("https://", "http://")):
-              raise SystemExit("source_url must be an http(s) URL")
-          print("Configuration is valid; secrets are not printed.")
-          PY
+          [[ "$SOURCE_URL" =~ ^https?:// ]] || { echo "source_url must be an http(s) URL"; exit 1; }
+          echo "Configuration is valid; secrets are not printed."
 
       - name: Install Kaggle CLI
         run: python -m pip install --upgrade pip kaggle
+
+      - name: Resolve Kaggle kernel id
+        run: |
+          set -euo pipefail
+          kernel_id="${KAGGLE_KERNEL_ID:-}"
+          if [ -z "$kernel_id" ]; then
+            echo "KAGGLE_KERNEL_ID is not set; discovering the Kaggle username from personal Kernels..."
+            kernel_refs="$(kaggle kernels list --mine --csv --page-size 1 2>/dev/null || true)"
+            username="$(printf '%s\n' "$kernel_refs" | awk -F',' 'NR > 1 && $1 ~ /^[^,[:space:]]+\/[^,[:space:]]+$/ { split($1, parts, "/"); print parts[1]; exit }')"
+            if [ -z "$username" ]; then
+              echo "Could not discover Kaggle username. Add repository secret KAGGLE_KERNEL_ID as kaggle_username/dbyt-one-click, then rerun."
+              exit 1
+            fi
+            kernel_id="$username/dbyt-one-click"
+          fi
+          if [[ ! "$kernel_id" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
+            echo "KAGGLE_KERNEL_ID must be kaggle_username/kernel-slug"
+            exit 1
+          fi
+          echo "KAGGLE_KERNEL_ID=$kernel_id" >> "$GITHUB_ENV"
+          echo "Using Kaggle kernel id: $kernel_id"
 
       - name: Prepare private Kaggle GPU kernel
         env:
