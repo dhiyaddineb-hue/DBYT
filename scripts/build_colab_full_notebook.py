@@ -107,9 +107,29 @@ GITHUB_REPO = "dhiyaddineb-hue/DBYT"  #@param {type:"string"}
 
 try:
     from google.colab import userdata
-    GITHUB_TOKEN = userdata.get('DBYT_COLAB_TOKEN')
 except Exception:
+    userdata = None
+
+if userdata is not None:
+    try:
+        GITHUB_TOKEN = userdata.get('DBYT_COLAB_TOKEN')
+    except Exception:
+        GITHUB_TOKEN = os.environ.get('DBYT_COLAB_TOKEN', '')
+    try:
+        youtube_cookies_blob = userdata.get('YOUTUBE_COOKIES')
+    except Exception:
+        youtube_cookies_blob = os.environ.get('YOUTUBE_COOKIES', '')
+else:
     GITHUB_TOKEN = os.environ.get('DBYT_COLAB_TOKEN', '')
+    youtube_cookies_blob = os.environ.get('YOUTUBE_COOKIES', '')
+
+YOUTUBE_COOKIES_PATH = None
+if youtube_cookies_blob:
+    YOUTUBE_COOKIES_PATH = WORK_DIR / 'youtube_cookies.txt'
+    YOUTUBE_COOKIES_PATH.write_text(youtube_cookies_blob, encoding='utf-8')
+    print('✅ Optional YouTube cookies loaded for yt-dlp (value not displayed).')
+else:
+    print('ℹ️ No optional YOUTUBE_COOKIES Secret; yt-dlp will use anonymous access.')
 
 if not GITHUB_TOKEN:
     raise RuntimeError('أضف DBYT_COLAB_TOKEN إلى Colab Secrets قبل المتابعة.')
@@ -156,6 +176,8 @@ for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
     ]
     if selected_client:
         command += ['--extractor-args', f'youtube:player_client={selected_client}']
+    if YOUTUBE_COOKIES_PATH and YOUTUBE_COOKIES_PATH.exists():
+        command += ['--cookies', str(YOUTUBE_COOKIES_PATH)]
     if selected_format:
         command += ['--format', selected_format]
     command += [
@@ -182,7 +204,10 @@ for attempt, (selected_client, selected_format) in enumerate(attempts, start=1):
     print(f'⚠️ Attempt {attempt} failed; yt-dlp said:\\n{last_error[-4000:]}', flush=True)
     lowered_error = last_error.lower()
     if 'sign in to confirm' in lowered_error or 'not a bot' in lowered_error or 'http error 429' in lowered_error:
-        print('ℹ️ YouTube is rate-limiting or blocking this Colab network; a new Colab runtime may be required.', flush=True)
+        if YOUTUBE_COOKIES_PATH:
+            print('ℹ️ YouTube rejected the supplied cookies or still blocks this network; export a fresh cookie file if needed.', flush=True)
+        else:
+            print('ℹ️ YouTube is rate-limiting or blocking this Colab network; a new Colab runtime may be required. A YOUTUBE_COOKIES Secret may help.', flush=True)
     if attempt < len(attempts):
         time.sleep(min(30, 5 * attempt))
 else:
