@@ -82,10 +82,10 @@ jobs:
             kernel_refs="$(kaggle kernels list --mine --csv --page-size 1 2>/dev/null || true)"
             username="$(printf '%s\n' "$kernel_refs" | awk -F',' 'NR > 1 && $1 ~ /^[^,[:space:]]+\/[^,[:space:]]+$/ { split($1, parts, "/"); print parts[1]; exit }')"
             if [ -z "$username" ]; then
-              echo "Kaggle username could not be discovered. Create one private Kaggle Kernel or add KAGGLE_KERNEL_ID=username/dbyt-download."
+              echo "Kaggle username could not be discovered. Create one private Kaggle Notebook or add KAGGLE_KERNEL_ID=username/dbyt-youtube-download."
               exit 1
             fi
-            kernel_id="$username/dbyt-download"
+            kernel_id="$username/dbyt-youtube-download"
           fi
           if [[ ! "$kernel_id" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
             echo "KAGGLE_KERNEL_ID must be username/kernel-slug"

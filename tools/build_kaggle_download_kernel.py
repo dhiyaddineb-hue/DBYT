@@ -1,4 +1,4 @@
-"""Build a private Kaggle download-only kernel payload for GitHub Actions."""
+"""Build a private Kaggle notebook payload for GitHub-triggered downloads."""
 from __future__ import annotations
 
 import base64
@@ -35,13 +35,36 @@ def main() -> None:
         raise SystemExit("Download runner placeholder was not found exactly once")
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    (OUTPUT / "dbyt_youtube_download.py").write_text(source, encoding="utf-8")
+    notebook = {
+        "cells": [
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": source.splitlines(keepends=True),
+            }
+        ],
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {"name": "python", "version": "3.11"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    (OUTPUT / "dbyt_youtube_download.ipynb").write_text(
+        json.dumps(notebook, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     metadata = {
         "id": kernel_id,
         "title": "DBYT Download",
-        "code_file": "dbyt_youtube_download.py",
+        "code_file": "dbyt_youtube_download.ipynb",
         "language": "python",
-        "kernel_type": "script",
+        "kernel_type": "notebook",
         "is_private": "true",
         "enable_gpu": "false",
         "enable_internet": "true",
@@ -54,7 +77,7 @@ def main() -> None:
     (OUTPUT / "kernel-metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"Prepared private Kaggle download kernel in {OUTPUT}")
+    print(f"Prepared private Kaggle notebook payload in {OUTPUT}")
 
 
 if __name__ == "__main__":

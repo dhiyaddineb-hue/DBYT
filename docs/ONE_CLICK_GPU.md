@@ -25,9 +25,9 @@ GitHub Release نهائي
 | الاسم | القيمة |
 |---|---|
 | `KAGGLE_API_TOKEN` | قيمة Kaggle API token |
-| `KAGGLE_KERNEL_ID` | اختياري؛ الصيغة `kaggle_username/dbyt-download` إذا لم يستطع Workflow اكتشاف حساب Kaggle من Kernels السابقة |
+| `KAGGLE_KERNEL_ID` | اختياري؛ الصيغة `kaggle_username/dbyt-youtube-download` إذا لم يستطع Workflow اكتشاف حساب Kaggle من Kernels السابقة |
 
-يمكنك أيضًا إنشاء Secret اختياري باسم `YOUTUBE_COOKIES` داخل Kaggle لاستخدام cookies حديثة أثناء التنزيل. لا تضع cookies داخل المستودع أو داخل الكود.
+ينشئ Workflow Notebook باسم `dbyt-youtube-download` بدل Script. افتح هذا Notebook في Kaggle مرة واحدة، وفعّل Internet من إعدادات Notebook، ثم أضف Secret باسم `YOUTUBE_COOKIES` من **Add-ons → Secrets**. لا تضع cookies داخل المستودع أو داخل الكود.
 
 ## التشغيل
 
@@ -52,4 +52,5 @@ Kaggle هو الذي يحاول تنزيل YouTube، لذلك لا نستخدم 
 
 [1]: https://www.kaggle.com/settings/api — Kaggle API token settings
 [2]: https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels.md — Kaggle Kernel push, status, and output
-[3]: https://github.com/dhiyaddineb-hue/DBYT/actions/workflows/one-click-gpu-dubbing.yml — Workflow in DBYT
+[3]: https://www.kaggle.com/code/dhiyaddineberkane/dbyt-youtube-download — Download Notebook created by the workflow
+[4]: https://github.com/dhiyaddineb-hue/DBYT/actions/workflows/one-click-gpu-dubbing.yml — Workflow in DBYT
