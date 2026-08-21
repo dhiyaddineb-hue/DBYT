@@ -42,9 +42,21 @@ GitHub: حفظ الكود والملفات والنتائج فقط
 """)
 
 code("""#@title 1) تثبيت الأدوات الأساسية
-!sudo apt-get update -qq
-!sudo apt-get install -y -qq ffmpeg
-!pip -q install -U "yt-dlp[default]==2026.8.19" yt-dlp-ejs "pydantic==2.7.4" "pydantic-settings==2.3.4" requests faster-whisper deep-translator soundfile huggingface_hub nest_asyncio
+import sys, shutil, subprocess
+from urllib.request import urlopen
+
+# Fail fast if Colab has no Internet instead of waiting through apt/pip DNS retries.
+try:
+    with urlopen('https://pypi.org/simple/yt-dlp/', timeout=12) as response:
+        if response.status != 200:
+            raise RuntimeError(f'PyPI connectivity check returned HTTP {response.status}')
+except Exception as exc:
+    raise RuntimeError('Colab Internet is disabled or DNS is unavailable. Open Runtime settings, enable Internet access, restart the runtime, and run this cell again.') from exc
+
+if shutil.which('ffmpeg') is None:
+    subprocess.run(['apt-get', '-o', 'Acquire::Retries=1', '-o', 'Acquire::http::Timeout=15', '-o', 'Acquire::https::Timeout=15', 'update', '-qq'], check=True)
+    subprocess.run(['apt-get', '-o', 'Acquire::Retries=1', '-o', 'Acquire::http::Timeout=15', '-o', 'Acquire::https::Timeout=15', 'install', '-y', '-qq', 'ffmpeg'], check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-U', 'yt-dlp[default]==2026.8.19', 'yt-dlp-ejs', 'pydantic==2.7.4', 'pydantic-settings==2.3.4', 'requests', 'faster-whisper', 'deep-translator', 'soundfile', 'huggingface_hub', 'nest_asyncio'], check=True)
 
 from pathlib import Path
 import importlib.metadata

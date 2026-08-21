@@ -12,7 +12,7 @@ YouTube → yt-dlp داخل Colab → Whisper → ترجمة → Fasih-TTS-V1 �
 
 يحتاج التشغيل إلى جلسة Google Colab، ويفضل اختيار **GPU** من `Runtime → Change runtime type`. يستطيع المسار استخدام CPU، لكن نموذج Fasih وWhisper سيكونان أبطأ بكثير. النموذج الموصى به للعربية هو `NightPrince/Fasih-TTS-V1`، وهو صوت ذكوري احترافي للفصحى مبني على XTTS-v2. يختار الدفتر تلقائيًا مقطعًا صوتيًا قصيرًا من المصدر لاستعماله كمرجع للصوت.
 
-الخلية الأولى تثبت `yt-dlp[default]` بإصدار مثبت و`yt-dlp-ejs` و`pydantic-settings`، وتثبت **Deno** تلقائيًا داخل `/content/dbty/.deno` بطريقة غير تفاعلية، ثم تتحقق من وجود `ffmpeg` و`yt-dlp` وتطبع الإصدارات، بما فيها إصدار `pydantic-settings`. يحتاج yt-dlp الحديث إلى JavaScript runtime وEJS لحل تحديات YouTube؛ لذلك لا تتجاوز الخلية الأولى حتى تظهر رسالتا الإصدار بنجاح.
+الخلية الأولى تفحص Internet وDNS إلى PyPI خلال 12 ثانية قبل أي تثبيت؛ إذا كانت شبكة Colab معطلة تتوقف برسالة واضحة بدل انتظار apt/pip عدة دقائق. بعد نجاح الفحص تثبت `yt-dlp[default]` بإصدار مثبت و`yt-dlp-ejs` و`pydantic-settings`، وتثبت **Deno** تلقائيًا داخل `/content/dbty/.deno` بطريقة غير تفاعلية، ثم تتحقق من وجود `ffmpeg` و`yt-dlp` وتطبع الإصدارات، بما فيها إصدار `pydantic-settings`. يحتاج yt-dlp الحديث إلى JavaScript runtime وEJS لحل تحديات YouTube؛ لذلك لا تتجاوز الخلية الأولى حتى تظهر رسالتا الإصدار بنجاح.
 
 > **تنبيه الترخيص:** بطاقة Fasih-TTS-V1 تذكر أن النموذج موزع وفق Coqui Public Model License، مع استخدام غير تجاري وإسناد. لا تستخدمه تجاريًا قبل مراجعة الرخصة والشروط الحالية.
 
