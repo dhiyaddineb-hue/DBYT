@@ -50,6 +50,8 @@ setup_note = {
 }
 insert_at = 1 if notebook.get('cells') else 0
 notebook['cells'].insert(insert_at, setup_note)
+for index, cell in enumerate(notebook['cells'], start=1):
+    cell['id'] = f'dbyt-kaggle-{index:03d}'
 
 TARGET.write_text(json.dumps(notebook, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 print(f'Wrote {TARGET}')

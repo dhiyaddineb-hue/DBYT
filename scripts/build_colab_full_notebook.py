@@ -406,6 +406,9 @@ md("""## النتيجة
 لا يحتاج هذا المسار إلى تشغيل GitHub Actions. إذا انقطعت جلسة Colab قبل الخلية الأخيرة، أعد تشغيل الدفتر من الخلية المناسبة؛ أما إذا انتهت الدبلجة ونجح الرفع، تبقى الملفات في GitHub حتى بعد انتهاء جلسة Colab.
 """)
 
+for index, cell in enumerate(CELLS, start=1):
+    cell['id'] = f'dbyt-{index:03d}'
+
 notebook = {
     'cells': CELLS,
     'metadata': {
