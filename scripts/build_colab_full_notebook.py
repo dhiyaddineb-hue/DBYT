@@ -157,12 +157,22 @@ subprocess.run([
 ], check=True)
 if TTS_ENGINE == 'fasih':
     try:
+        import torch
         import transformers
+        import transformers.pytorch_utils as _pt_utils
+        if not hasattr(_pt_utils, 'isin_mps_friendly'):
+            def isin_mps_friendly(elements, test_elements, *args, **kwargs):
+                return torch.isin(elements, test_elements, *args, **kwargs)
+            _pt_utils.isin_mps_friendly = isin_mps_friendly
+            print('ℹ️ Applied compatibility shim: transformers.pytorch_utils.isin_mps_friendly → torch.isin', flush=True)
+        for module_name in list(sys.modules):
+            if module_name == 'TTS' or module_name.startswith('TTS.'):
+                del sys.modules[module_name]
         from transformers.pytorch_utils import isin_mps_friendly
         from TTS.api import TTS as _FasihTTS
         print(f'✅ Fasih compatibility check: coqui-tts 0.27.5 + transformers {transformers.__version__}', flush=True)
     except Exception as exc:
-        raise RuntimeError('Fasih dependencies are incompatible. Expected coqui-tts==0.27.5 with transformers==5.0.0.') from exc
+        raise RuntimeError(f'Fasih import failed after compatibility setup. transformers={globals().get("transformers", "unknown")}') from exc
 try:
     import torch
     has_gpu = bool(torch.cuda.is_available())
