@@ -149,10 +149,20 @@ if not re.match(r'https://(www\\.)?youtube\\.com/|https://youtu\\.be/', VIDEO_UR
 if TTS_ENGINE == 'fasih' and TARGET_LANGUAGE != 'ar':
     raise ValueError('Fasih-TTS-V1 مخصص للعربية الفصحى؛ اختر ar أو استخدم Sherpa.')
 
-# Install only the selected TTS backend. This avoids unnecessary dependency
-# conflicts and makes the notebook safe to rerun after changing the engine.
-tts_package = 'coqui-tts==0.27.5' if TTS_ENGINE == 'fasih' else 'sherpa-onnx==1.13.6'
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', tts_package], check=True)
+# Install only the selected TTS backend. Fasih 0.27.5 currently needs
+# transformers 5.0.0: transformers 5.1+ removed isin_mps_friendly.
+tts_packages = ['coqui-tts==0.27.5', 'transformers==5.0.0'] if TTS_ENGINE == 'fasih' else ['sherpa-onnx==1.13.6']
+subprocess.run([
+    sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', '--upgrade-strategy', 'eager', *tts_packages,
+], check=True)
+if TTS_ENGINE == 'fasih':
+    try:
+        import transformers
+        from transformers.pytorch_utils import isin_mps_friendly
+        from TTS.api import TTS as _FasihTTS
+        print(f'✅ Fasih compatibility check: coqui-tts 0.27.5 + transformers {transformers.__version__}', flush=True)
+    except Exception as exc:
+        raise RuntimeError('Fasih dependencies are incompatible. Expected coqui-tts==0.27.5 with transformers==5.0.0.') from exc
 try:
     import torch
     has_gpu = bool(torch.cuda.is_available())
