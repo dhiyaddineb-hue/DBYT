@@ -127,9 +127,13 @@ YOUTUBE_COOKIES_PATH = None
 if youtube_cookies_blob:
     YOUTUBE_COOKIES_PATH = WORK_DIR / 'youtube_cookies.txt'
     YOUTUBE_COOKIES_PATH.write_text(youtube_cookies_blob, encoding='utf-8')
-    print('✅ Optional YouTube cookies loaded for yt-dlp (value not displayed).')
+    cookie_lines = [line for line in youtube_cookies_blob.splitlines() if line.strip() and not line.lstrip().startswith('#')]
+    cookie_is_netscape = any(len(line.split('\t')) >= 7 for line in cookie_lines)
+    if YOUTUBE_COOKIES_PATH.stat().st_size < 100 or not cookie_is_netscape:
+        raise RuntimeError('YOUTUBE_COOKIES موجود لكنه ليس ملف Netscape صالحًا. ضع محتوى ملف cookies.txt الكامل في Secret، وليس اسم الملف أو مساره.')
+    print(f'✅ Optional YouTube cookies loaded for yt-dlp ({YOUTUBE_COOKIES_PATH.stat().st_size} bytes; value hidden).')
 else:
-    print('ℹ️ No optional YOUTUBE_COOKIES Secret; yt-dlp will use anonymous access.')
+    print('⚠️ No optional YOUTUBE_COOKIES Secret; yt-dlp will use anonymous access and YouTube may reject the request.')
 
 if not GITHUB_TOKEN:
     raise RuntimeError('أضف DBYT_COLAB_TOKEN إلى Colab Secrets قبل المتابعة.')
@@ -157,6 +161,10 @@ print(f'✅ Settings loaded: {GITHUB_REPO} | engine={TTS_ENGINE} | target={TARGE
 code("""#@title 3) تنزيل الفيديو من YouTube داخل Colab
 import time
 source_path = WORK_DIR / 'source.mp4'
+if YOUTUBE_COOKIES_PATH and YOUTUBE_COOKIES_PATH.exists():
+    print(f'🔐 yt-dlp will use YOUTUBE_COOKIES ({YOUTUBE_COOKIES_PATH.stat().st_size} bytes; value hidden).', flush=True)
+else:
+    print('⚠️ yt-dlp is running without YOUTUBE_COOKIES; expect bot-check if YouTube blocks anonymous access.', flush=True)
 attempts = [
     ('android_vr', 'bv*[height<=720]+ba/b[height<=720]/best'),
     ('android_vr', None),
