@@ -1,0 +1,180 @@
+name: One-click GPU dubbing
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: "Public direct video URL, GitHub Release asset URL, or YouTube URL"
+        required: true
+        type: string
+      target_language:
+        description: "Target language"
+        required: true
+        default: "ar"
+        type: string
+      project_name:
+        description: "Output file name without extension"
+        required: true
+        default: "dbyt-project"
+        type: string
+      tts_engine:
+        description: "Arabic voice engine"
+        required: true
+        default: "fasih"
+        type: choice
+        options:
+          - fasih
+          - sherpa
+      whisper_model:
+        description: "Whisper model; small is more accurate, base/tiny are faster"
+        required: true
+        default: "small"
+        type: choice
+        options:
+          - tiny
+          - base
+          - small
+      granularity:
+        description: "TTS unit size"
+        required: true
+        default: "segment"
+        type: choice
+        options:
+          - segment
+          - word
+
+permissions:
+  contents: write
+
+env:
+  KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
+  KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+  SOURCE_URL: ${{ inputs.source_url }}
+  TARGET_LANGUAGE: ${{ inputs.target_language }}
+  PROJECT_NAME: ${{ inputs.project_name }}
+  TTS_ENGINE: ${{ inputs.tts_engine }}
+  WHISPER_MODEL: ${{ inputs.whisper_model }}
+  GRANULARITY: ${{ inputs.granularity }}
+  DBYT_REPOSITORY: ${{ github.repository }}
+  DBYT_REF: ${{ github.sha }}
+
+concurrency:
+  group: dbyt-one-click-gpu-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  dub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out DBYT
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Validate configuration
+        run: |
+          set -euo pipefail
+          test -n "$KAGGLE_KERNEL_ID" || { echo "Missing repository secret KAGGLE_KERNEL_ID"; exit 1; }
+          test -n "$KAGGLE_API_TOKEN" || { echo "Missing repository secret KAGGLE_API_TOKEN"; exit 1; }
+          python - <<'PY'
+          import os, re
+          if not re.fullmatch(r"[^/\\s]+/[^/\\s]+", os.environ["KAGGLE_KERNEL_ID"]):
+              raise SystemExit("KAGGLE_KERNEL_ID must be kaggle_username/kernel-slug")
+          if not os.environ["SOURCE_URL"].startswith(("https://", "http://")):
+              raise SystemExit("source_url must be an http(s) URL")
+          print("Configuration is valid; secrets are not printed.")
+          PY
+
+      - name: Install Kaggle CLI
+        run: python -m pip install --upgrade pip kaggle
+
+      - name: Prepare private Kaggle GPU kernel
+        env:
+          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-kernel
+        run: |
+          set -euo pipefail
+          python tools/build_kaggle_kernel.py
+          test -s "$KAGGLE_KERNEL_DIR/dbyt_one_click.py"
+          test -s "$KAGGLE_KERNEL_DIR/kernel-metadata.json"
+
+      - name: Start Kaggle T4 GPU run
+        env:
+          KAGGLE_KERNEL_DIR: ${{ runner.temp }}/dbyt-kernel
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dbyt-status"
+          kaggle kernels push \
+            --path "$KAGGLE_KERNEL_DIR" \
+            --accelerator NvidiaTeslaT4 \
+            --timeout 7200 \
+            2>&1 | tee "$RUNNER_TEMP/dbyt-status/push.log"
+
+      - name: Wait for Kaggle run
+        run: |
+          set -euo pipefail
+          status_file="$RUNNER_TEMP/dbyt-status/status.log"
+          final_status=""
+          for attempt in $(seq 1 240); do
+            status_output="$(kaggle kernels status "$KAGGLE_KERNEL_ID" 2>&1 || true)"
+            printf '[%s] %s\\n' "$attempt" "$status_output" | tee -a "$status_file"
+            if printf '%s' "$status_output" | grep -Eiq 'complete|success|succeeded'; then
+              final_status="complete"
+              break
+            fi
+            if printf '%s' "$status_output" | grep -Eiq 'error|failed|cancelled|canceled'; then
+              final_status="failed"
+              break
+            fi
+            sleep 30
+          done
+          test "$final_status" = complete || {
+            echo "Kaggle run did not complete successfully within the wait window."
+            exit 1
+          }
+
+      - name: Download Kaggle output
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/dbyt-kaggle-output"
+          mkdir -p "$RUNNER_TEMP/dbyt-kaggle-output"
+          kaggle kernels output "$KAGGLE_KERNEL_ID" \
+            --path "$RUNNER_TEMP/dbyt-kaggle-output" \
+            --force
+          video="$(find "$RUNNER_TEMP/dbyt-kaggle-output" -type f \\( -iname '*.mp4' -o -iname '*.mp3' \\) -print -quit)"
+          test -n "$video" || { echo "Kaggle completed without a dubbed media file."; exit 1; }
+          mkdir -p one-click-output
+          cp "$video" "one-click-output/${PROJECT_NAME}$(basename "$video" | sed 's/.*\\././')"
+          find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'run.json' -exec cp {} one-click-output/run.json \\;
+          find "$RUNNER_TEMP/dbyt-kaggle-output" -type f -name 'pipeline.log' -exec cp {} one-click-output/pipeline.log \\;
+          ls -lh one-click-output
+
+      - name: Publish result to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="dbyt-result-${GITHUB_RUN_ID}"
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "DBYT result ${GITHUB_RUN_NUMBER}" \
+            --notes "One-click DBYT GPU run. Engine=${TTS_ENGINE}; language=${TARGET_LANGUAGE}; Whisper=${WHISPER_MODEL}; granularity=${GRANULARITY}." \
+            one-click-output/*
+          echo "Release published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
+
+      - name: Upload diagnostics as Actions artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbyt-one-click-${{ github.run_id }}
+          path: |
+            one-click-output
+            ${{ runner.temp }}/dbyt-status
+            ${{ runner.temp }}/dbyt-kernel
+          if-no-files-found: warn
+          retention-days: 7
