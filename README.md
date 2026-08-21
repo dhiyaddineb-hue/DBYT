@@ -27,6 +27,7 @@
 | 👄 **مزامنة شفاه (Wav2Lip)** | إعادة تحريك الفم ليطابق الصوت الجديد — يبدو الفيديو **أصلياً لا دوبلاج** |
 | 🎵 **خلفية موسيقية** | إبقاء الموسيقى والأصوات الخلفية تحت الصوت الجديد |
 | 🧩 **محركات صوت متعددة** | Fasih-TTS-V1 للعربية الفصحى / Sherpa-ONNX المحلي / Edge / XTTS |
+| ☁️ **Kaggle GPU** | شغّل التنزيل والدبلجة كاملة داخل Kaggle Notebook مع GPU عند التوفر |
 | ☁️ **Colab GPU** | شغّل التنزيل والدبلجة كاملة داخل جلسة Colab |
 | 🗄️ **GitHub للتخزين** | احفظ المصدر والنتيجة والسجل في GitHub Releases دون تشغيل Actions |
 
@@ -114,7 +115,13 @@ docker compose up --build
 
 للتشغيل المستمر استخدم ملفات [`deploy/README.md`](deploy/README.md) و`deploy/docker-compose.prod.yml`.
 
-### 4) الاستضافة الإنتاجية
+### 4) التشغيل عبر Kaggle GPU — البديل المجاني الموصى به
+
+افتح [Notebook Kaggle للدبلجة الكاملة](notebooks/DBYT_kaggle_full_dubbing.ipynb)، أو ارفعه إلى Kaggle، ثم فعّل **Internet** و**GPU** من Settings. أنشئ Kaggle Secret باسم `DBYT_GITHUB_TOKEN` وضع فيه GitHub token بصلاحية Contents: Read and write. شغّل الخلايا بالترتيب؛ يحفظ GitHub الكود والنتائج فقط بينما ينفذ Kaggle الدبلجة على GPU.
+
+راجع [`docs/KAGGLE_FULL_PIPELINE.md`](docs/KAGGLE_FULL_PIPELINE.md) للتعليمات التفصيلية. إذا كان GPU في طابور أو غير متاح، لا تبدأ `fasih`؛ انتظر جلسة GPU أو استخدم `sherpa` على CPU.
+
+### 5) الاستضافة الإنتاجية
 
 يحتوي المستودع الآن على حزمة نشر كاملة: حاوية DBYT غير root، Caddy لـ reverse proxy وHTTPS، volumes دائمة، healthchecks، systemd، وWorkflow نشر عبر SSH. شغّلها من [`deploy/README.md`](deploy/README.md). يجب تعريف `DBYT_API_KEY` على الخادم قبل فتح الخدمة للعامة، وعدم وضع cookies أو مفاتيح API داخل المستودع.
 
