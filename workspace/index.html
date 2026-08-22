@@ -555,13 +555,15 @@
     <!-- Master Audio Bar -->
     <div class="master-audio-banner">
       <div class="banner-text">
-        <h2 id="master-title">🎵 المسار الصوتي الكامل المدبلج (The Furious Full Audio)</h2>
-        <p>استمع وحمّل ملف الصوت العربي الموحد والمطابق للمشاهد بدقة كلمة بكلمة.</p>
+        <h2 id="master-title">🎙️ مشغل الدوبلاج الصوتي المتزامن مع الفيديو مباشرة</h2>
+        <p>اضغط على الزر الأخضر الكبير أدناه لبدء تشغيل الفيديو مع الصوت العربي المدبلج في نفس اللحظة.</p>
       </div>
       <div class="banner-actions">
-        <audio id="master-audio-player" class="audio-player-custom" controls src="output/the-furious-movie/the_furious_dubbed_full.mp3"></audio>
-        <a id="master-download-btn" class="dl-master-btn" href="output/the-furious-movie/the_furious_dubbed_full.mp3" download="The_Furious_Arabic_Dubbed_Full.mp3">
-          ⬇ تحميل ملف الصوت الكامل (MP3)
+        <button class="dl-master-btn" style="cursor: pointer; border: none; font-size: 1.05rem; padding: 0.8rem 1.6rem;" onclick="startFullDubbingPlay()">
+          ▶ ابدأ الدوبلاج والتشغيل المتزامن الآن
+        </button>
+        <a id="master-download-btn" class="dl-master-btn" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border);" href="Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3" download="Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3">
+          ⬇ تحميل ملف الصوت المتزامن (MP3)
         </a>
       </div>
     </div>
@@ -730,6 +732,14 @@
     let audioElement = new Audio();
     let currentSceneIndex = 0;
     let isPlayingSync = false;
+
+    function startFullDubbingPlay() {
+      if (ytPlayer && ytPlayer.playVideo) {
+        ytPlayer.seekTo(0, true);
+        ytPlayer.playVideo();
+      }
+      selectScene(0);
+    }
 
     function onYouTubeIframeAPIReady() {
       loadProject(currentProjectKey);
