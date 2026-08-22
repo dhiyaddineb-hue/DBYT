@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "project": "Jim Rohn - 9 Tips to Improve Communication Skills",
+  "video_url": "https://youtu.be/g9wkTIUkKYk",
+  "duration": "07:58",
+  "srt_file": "Jim_Rohn_9_Tips_Arabic.srt",
+  "master_audio": "Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3",
+  "timing_matrix": "Jim_Rohn_Word_Timing_Matrix.md",
+  "audio_clips_count": 9,
+  "interactive_player": "workspace/index.html",
+  "timestamp": "2026-08-22 20:37:00 UTC"
+}
