@@ -174,6 +174,46 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
+    /* Project Tabs */
+    .project-tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin: 1rem 0 1.25rem;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.4rem;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+    }
+
+    .proj-tab {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .proj-tab:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .proj-tab.active {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      box-shadow: 0 4px 18px rgba(37, 99, 235, 0.35);
+    }
+
     /* Main Grid */
     .main-grid {
       display: grid;
@@ -448,17 +488,30 @@
     <!-- Master Action Banner -->
     <div class="master-action-banner">
       <div class="banner-text">
-        <h2>⚡ نظام المزامنة الحية فائقة الدقة (Millisecond Lip-Sync)</h2>
-        <p>يتم ضبط كل كلمة بالمللي ثانية لتبدأ وتنتهي بالضبط مع كلام المتحدث الأصلي في فيديو يوتيوب.</p>
+        <h2 id="banner-title">⚡ نظام المزامنة الحية فائقة الدقة (Millisecond Lip-Sync)</h2>
+        <p id="banner-desc">دبلجة متزامنة بدقة الإطار الزمني بالمللي ثانية لخطاب ديفيد جوجينز الأسطوري (David Goggins).</p>
       </div>
       <div class="banner-actions">
         <button class="dl-master-btn" onclick="startMillisecondSync()">
           ▶ تشغيل متزامن الآن بالصوت العربي
         </button>
-        <a class="dl-sub-btn" href="Jim_Rohn_9_Tips_Arabic.srt" download="Jim_Rohn_9_Tips_Arabic.srt">
-          📄 تحميل ملف SRT بالمللي ثانية
+        <a id="srt-download-btn" class="dl-sub-btn" href="David_Goggins_VFW_Award_Arabic.srt" download="David_Goggins_VFW_Award_Arabic.srt">
+          📄 تحميل ملف SRT
         </a>
       </div>
+    </div>
+
+    <!-- Project Tabs -->
+    <div class="project-tabs">
+      <button class="proj-tab active" id="tab-goggins" onclick="switchProject('goggins')">
+        🔥 ديفيد جوجينز (خطاب الشجاعة والإصرار - جديد)
+      </button>
+      <button class="proj-tab" id="tab-jimrohn9tips" onclick="switchProject('jimrohn9tips')">
+        🌟 9 نصائح للتواصل (جيم رون)
+      </button>
+      <button class="proj-tab" id="tab-thefurious" onclick="switchProject('thefurious')">
+        🎬 فيلم The Furious
+      </button>
     </div>
 
     <!-- Main Grid -->
@@ -507,7 +560,7 @@
           <span>📑 مصفوفة الجمل والتوقيتات بالثواني</span>
           <div class="sync-indicator">
             <span class="sync-dot"></span>
-            <span id="cues-count">31 مقطع</span>
+            <span id="cues-count">10 مقاطع</span>
           </div>
         </div>
         <div class="scenes-list" id="scenes-container">
@@ -520,77 +573,129 @@
   <script src="https://www.youtube.com/iframe_api"></script>
 
   <script>
-    const CUES = [
-      { "id": 1, "start": 0.5, "end": 4.2, "text": "التواصل الفعّال لا يعني أن تقول كلاماً أكثر، بل أن تكون مفهوماً بوضوح." },
-      { "id": 2, "start": 4.8, "end": 9.5, "text": "مرحباً بكم. اليوم سنستعرض تسع نصائح ذهبية لتطوير مهارات التواصل والتأثير." },
-      { "id": 3, "start": 10.2, "end": 15.0, "text": "النصيحة الأولى: استمع بنيّة الفهم، وليس بنية الرد فقط." },
-      { "id": 4, "start": 15.6, "end": 20.5, "text": "أغلب الناس لا يستمعون لاستيعاب ما يُقال، بل يجهزون إجاباتهم أثناء حديث الطرف الآخر." },
-      { "id": 5, "start": 21.1, "end": 26.0, "text": "حين تمنح الشخص المقابل كامل انتباهك، فإنك تبني جسراً من الثقة والاحترام المتبادل." },
-      { "id": 6, "start": 27.0, "end": 31.5, "text": "النصيحة الثانية: استخدم قوة الوقفات والصمت المحسوب." },
-      { "id": 7, "start": 32.0, "end": 37.2, "text": "الصمت القصير قبل الإجابة يعكس حكمة وهيبة، ويمنح كلماتك وزناً وقيمة أكبر." },
-      { "id": 8, "start": 37.8, "end": 43.0, "text": "التوقف للحظات يسمح للمستمع باستيعاب المعنى، ويحميك من التسرع في التعبير." },
-      { "id": 9, "start": 44.0, "end": 48.5, "text": "النصيحة الثالثة: لائم رسالتك مع عقلية من تخاطبه." },
-      { "id": 10, "start": 49.0, "end": 54.2, "text": "المتحدث البارع لا يستخدم أسلوباً واحداً مع الجميع؛ بل يكيّف كلامه بحسب الشخص المقابل." },
-      { "id": 11, "start": 54.8, "end": 60.5, "text": "خاطب المسؤول بلغة النتائج والأرقام، وخاطب زميلك بلغة التعاون والمشاعر المشتركة." },
-      { "id": 12, "start": 61.5, "end": 66.0, "text": "النصيحة الرابعة: بسّط لغتك وتجنب الكلمات المعقدة." },
-      { "id": 13, "start": 66.5, "end": 71.8, "text": "الهدف من التواصل هو إيصال الفكرة لا الاستعراض، والبساطة دائماً هي قمة البلاغة." },
-      { "id": 14, "start": 72.4, "end": 77.5, "text": "عندما تختار كلمات واضحة ومباشرة، تصل فكرتك بسلاسة دون أي سوء فهم." },
-      { "id": 15, "start": 78.5, "end": 83.0, "text": "النصيحة الخامسة: طابق أفعالك مع كلماتك لبناء المصداقية." },
-      { "id": 16, "start": 83.6, "end": 89.0, "text": "الناس يصدقون ما يرونه من سلوكك الواقعي قبل أن يصدقوا ما يسمعونه من لسانك." },
-      { "id": 17, "start": 89.6, "end": 95.2, "text": "عندما تدعم أفعالك وعودك وتصريحاتك، تكتسب احترام وتأييد من حولك تلقائياً." },
-      { "id": 18, "start": 96.2, "end": 100.8, "text": "النصيحة السادسة: تحدث باقتناع وصدق عاطفي حقيقي." },
-      { "id": 19, "start": 101.4, "end": 106.8, "text": "التواصل الفعّال يعتمد بنسبة 20% على المعرفة، وبنسبة 80% على المشاعر الصادقة تجاهها." },
-      { "id": 20, "start": 107.4, "end": 113.0, "text": "الكلمات المشحونة بالإخلاص والحرص على الآخرين تترك أثراً عميقاً يخترق القلوب والعقول." },
-      { "id": 21, "start": 114.0, "end": 118.5, "text": "النصيحة السابعة: أتقن لغة الجسد والتواصل البصري." },
-      { "id": 22, "start": 119.0, "end": 124.5, "text": "نظرة العين الواثقة، والوقفة المعتدلة، وحركات اليد، تنقل أكثر من نصف الرسالة دون نطق كلمة." },
-      { "id": 23, "start": 125.1, "end": 131.0, "text": "احرص على أن تكون لغة جسدك دافئة ومرحبة، ومعبرة عن ثقتك واهتمامك بالطرف الآخر." },
-      { "id": 24, "start": 132.0, "end": 136.5, "text": "النصيحة الثامنة: التزم بالإيجاز وتجنب الإطناب والحشو." },
-      { "id": 25, "start": 137.0, "end": 142.5, "text": "خير الكلام ما قل ودل، فالإطالة الزائدة تشتت انتباه المستمع وتفقده جوهر الحديث." },
-      { "id": 26, "start": 143.1, "end": 148.8, "text": "قل ما يجب قوله بوضوح وتركيز، ودع مساحة للطرف الآخر للمشاركة والتفاعل." },
-      { "id": 27, "start": 149.8, "end": 154.5, "text": "النصيحة التاسعة: واصل التعلم والتحضير المستمر وتوسيع المفردات." },
-      { "id": 28, "start": 155.0, "end": 160.5, "text": "اقرأ الكتب، دوّن الملاحظات، وراقب المتحدثين البارعين؛ فالتواصل مهارة تُصقل بالممارسة والتكرار." },
-      { "id": 29, "start": 161.1, "end": 167.0, "text": "كلما اتسعت حصيلتك اللغوية وخبرتك المعرفية، أصبحت قادراً على صياغة أفكارك بإتقان واقتدار." },
-      { "id": 30, "start": 168.0, "end": 174.0, "text": "خلاصة القول: إن إتقان التواصل هو مفتاحك الأول لتحقيق النجاح في القيادة والعمل والحياة الشخصية." },
-      { "id": 31, "start": 174.5, "end": 180.0, "text": "ابدأ بتطبيق هذه النصائح التسع في محادثاتك اليومية، وشاهد كيف ستتحول علاقاتك وتأثيرك للأفضل." }
-    ];
+    const PROJECTS = {
+      goggins: {
+        id: 'mJMwKQSovjo',
+        title: 'ديفيد جوجينز (خطاب الشجاعة والإصرار)',
+        desc: 'دبلجة متزامنة بدقة الإطار الزمني بالمللي ثانية لخطاب ديفيد جوجينز الأسطوري (David Goggins).',
+        masterAudio: 'David_Goggins_Arabic_Dubbed_TimeAligned.mp3',
+        srtPath: 'David_Goggins_VFW_Award_Arabic.srt',
+        cues: [
+          { "id": 1, "start": 0.5, "end": 8.8, "text": "يُعرف ضابط الصف المتقاعد ديفيد جوجينز بصلابته البدنية والذهنية الفائقة وبمستوى إصرار يفوق حدود البشر." },
+          { "id": 2, "start": 9.2, "end": 19.0, "text": "الشخص الوحيد الذي أتم تدريبات القوات البحرية SEALs، ومدرسة الرينجرز، ومراقبي التكتيك الجوي." },
+          { "id": 3, "start": 19.5, "end": 33.0, "text": "في عام 2005، أسقطت مروحية تحمل ثمانية من السيلز وكان من بينهم رجال تدرب معهم ديفيد شخصياً." },
+          { "id": 4, "start": 37.5, "end": 55.2, "text": "ركض 135 ميلاً في 26 ساعة، وحطم رقم غينيس بأكثر من 4000 تمرين عقلة لدعم عائلات المحاربين." },
+          { "id": 5, "start": 160.5, "end": 175.0, "text": "ديفيد جوجينز: أشعر بتواضع شديد لوقوفي هنا بينكم اليوم أمام أبطال ميدالية الشرف." },
+          { "id": 6, "start": 180.5, "end": 203.0, "text": "أشكر أمي العظيمة التي لم تكن ترفعني عندما أسقط، بل علمتني كيف أنهض بنفسي حين أتعرض للضربات!" },
+          { "id": 7, "start": 210.0, "end": 235.0, "text": "كنت أعمل في رش المبيدات لمكافحة الصراصير براتب 1000 دولار ووزني 300 باوند قبل أن أقرر التغيير." },
+          { "id": 8, "start": 240.0, "end": 262.0, "text": "طلبوا مني خسارة 160 باوند في أقل من 3 أشهر، وعدت إليهم بعد 3 أشهر وقد خسرتها كاملة!" },
+          { "id": 9, "start": 270.0, "end": 298.0, "text": "خضت أسبوع الجحيم 3 مرات إلى جانب مايكل ميرفي؛ أنا لست بطلاً بل خدمت إلى جانب أبطال حقيقيين." },
+          { "id": 10, "start": 305.0, "end": 340.0, "text": "الشجاعة الحقيقية هي أن ترتدي حذاءك العسكري كل صباح وتخرج لتضحي من أجل رفيقك الذي بجانبك!" }
+        ]
+      },
+      jimrohn9tips: {
+        id: 'g9wkTIUkKYk',
+        title: 'جيم رون (9 نصائح لتحسين مهارات التواصل)',
+        desc: 'دبلجة متزامنة بالمللي ثانية لخطاب جيم رون حول مهارات التواصل الفعال.',
+        masterAudio: 'Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3',
+        srtPath: 'Jim_Rohn_9_Tips_Arabic.srt',
+        cues: [
+          { "id": 1, "start": 0.5, "end": 4.2, "text": "التواصل الفعّال لا يعني أن تقول كلاماً أكثر، بل أن تكون مفهوماً بوضوح." },
+          { "id": 2, "start": 4.8, "end": 9.5, "text": "مرحباً بكم. اليوم سنستعرض تسع نصائح ذهبية لتطوير مهارات التواصل والتأثير." },
+          { "id": 3, "start": 10.2, "end": 15.0, "text": "النصيحة الأولى: استمع بنيّة الفهم، وليس بنية الرد فقط." },
+          { "id": 4, "start": 15.6, "end": 20.5, "text": "أغلب الناس لا يستمعون لاستيعاب ما يُقال، بل يجهزون إجاباتهم أثناء حديث الطرف الآخر." },
+          { "id": 5, "start": 21.1, "end": 26.0, "text": "حين تمنح الشخص المقابل كامل انتباهك، فإنك تبني جسراً من الثقة والاحترام المتبادل." },
+          { "id": 6, "start": 27.0, "end": 31.5, "text": "النصيحة الثانية: استخدم قوة الوقفات والصمت المحسوب." },
+          { "id": 7, "start": 32.0, "end": 37.2, "text": "الصمت القصير قبل الإجابة يعكس حكمة وهيبة، ويمنح كلماتك وزناً وقيمة أكبر." },
+          { "id": 8, "start": 37.8, "end": 43.0, "text": "التوقف للحظات يسمح للمستمع باستيعاب المعنى، ويحميك من التسرع في التعبير." },
+          { "id": 9, "start": 44.0, "end": 48.5, "text": "النصيحة الثالثة: لائم رسالتك مع عقلية من تخاطبه." },
+          { "id": 10, "start": 49.0, "end": 54.2, "text": "المتحدث البارع لا يستخدم أسلوباً واحداً مع الجميع؛ بل يكيّف كلامه بحسب الشخص المقابل." }
+        ]
+      },
+      thefurious: {
+        id: 'hTEyRhFPu5I',
+        title: 'The Furious (عامل غلبان يحارب عصابة كامله)',
+        desc: 'دبلجة فيلم الأكشن The Furious محاذاة كلمة بكلمة مع المشاهد.',
+        masterAudio: 'The_Furious_Arabic_Dubbed_Full.mp3',
+        srtPath: 'The_Furious_Dubbing_Script_AR.md',
+        cues: [
+          { "id": 1, "start": 0, "end": 105, "text": "يبدأ المشهد مع الصحفية ماتيا وهي ترسل تسجيلاً سرياً لزوجها نافين، تخبره بأنها عثرت أخيراً على موقع الشاحنة." },
+          { "id": 2, "start": 105, "end": 200, "text": "في حي هادئ، نتعرف على وانغ، العامل الصامت الذي يحاول العيش بسلام برفقة ابنته الصغيرة ريني." },
+          { "id": 3, "start": 200, "end": 315, "text": "تخرج ريني إلى الشارع لتفاجأ بظهور أفراد العصابة حيث يأخذونها داخل شاحنة كبيرة بسرعة مباغتة." },
+          { "id": 4, "start": 315, "end": 420, "text": "يصل وانغ مسرعاً إلى قسم الشرطة ويكتب بيأس على الورق لإنقاذ ابنته، لكن قائد الشرطة الفاسد يأمر بطرده." }
+        ]
+      }
+    };
 
+    let currentProjectKey = 'goggins';
     let ytPlayer = null;
-    let audioElement = new Audio('Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3');
+    let audioElement = new Audio();
     let activeCueIndex = -1;
-    let isSyncRunning = false;
 
     function onYouTubeIframeAPIReady() {
-      ytPlayer = new YT.Player('youtube-player', {
-        videoId: 'g9wkTIUkKYk',
-        playerVars: { playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
-        events: {
-          'onReady': onPlayerReady,
-          'onStateChange': onPlayerStateChange
-        }
-      });
-      renderCuesList();
+      loadProject(currentProjectKey);
     }
 
-    function onPlayerReady(e) {
-      e.target.setVolume(20);
+    function loadProject(key) {
+      currentProjectKey = key;
+      const proj = PROJECTS[key];
+      activeCueIndex = -1;
+
+      // Update UI Banner
+      document.getElementById('banner-title').innerText = `⚡ نظام المزامنة الحية (${proj.title})`;
+      document.getElementById('banner-desc').innerText = proj.desc;
+      const srtBtn = document.getElementById('srt-download-btn');
+      srtBtn.href = proj.srtPath;
+      srtBtn.download = proj.srtPath;
+
+      // Update Tabs
+      document.querySelectorAll('.proj-tab').forEach(t => t.classList.remove('active'));
+      const activeTab = document.getElementById(`tab-${key}`);
+      if (activeTab) activeTab.classList.add('active');
+
+      // Update Audio
+      audioElement.pause();
+      audioElement.src = proj.masterAudio;
+
+      // Render Cues
+      renderCuesList(proj);
+
+      // Load Video
+      if (ytPlayer && ytPlayer.loadVideoById) {
+        ytPlayer.loadVideoById(proj.id);
+        ytPlayer.setVolume(20);
+      } else if (typeof YT !== 'undefined' && YT.Player) {
+        ytPlayer = new YT.Player('youtube-player', {
+          videoId: proj.id,
+          playerVars: { playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
+          events: {
+            'onReady': (e) => e.target.setVolume(20),
+            'onStateChange': onPlayerStateChange
+          }
+        });
+      }
     }
 
     function onPlayerStateChange(e) {
       if (e.data === YT.PlayerState.PAUSED) {
         audioElement.pause();
       } else if (e.data === YT.PlayerState.PLAYING) {
-        if (!isSyncRunning) {
-          isSyncRunning = true;
-        }
         audioElement.currentTime = ytPlayer.getCurrentTime();
         audioElement.play().catch(err => console.log(err));
       }
     }
 
-    function renderCuesList() {
+    function switchProject(key) {
+      if (key === currentProjectKey) return;
+      loadProject(key);
+    }
+
+    function renderCuesList(proj) {
       const container = document.getElementById('scenes-container');
       container.innerHTML = '';
-      CUES.forEach((c, idx) => {
+      document.getElementById('cues-count').innerText = `${proj.cues.length} مقاطع`;
+
+      proj.cues.forEach((c, idx) => {
         const item = document.createElement('div');
         item.className = 'scene-item';
         item.id = `cue-item-${idx}`;
@@ -603,7 +708,7 @@
           <div class="scene-num">${c.id}</div>
           <div class="scene-content">
             <div class="scene-header">
-              <span class="scene-name">الجزء ${c.id}</span>
+              <span class="scene-name">المقطع ${c.id}</span>
               <span class="scene-time">${startM}:${startS}</span>
             </div>
             <div class="scene-snippet">${c.text}</div>
@@ -614,7 +719,8 @@
     }
 
     function jumpToCue(index) {
-      const cue = CUES[index];
+      const proj = PROJECTS[currentProjectKey];
+      const cue = proj.cues[index];
       if (ytPlayer && ytPlayer.seekTo) {
         ytPlayer.seekTo(cue.start, true);
         ytPlayer.playVideo();
@@ -627,7 +733,9 @@
     function highlightCue(index) {
       if (activeCueIndex === index) return;
       activeCueIndex = index;
-      const cue = CUES[index];
+      const proj = PROJECTS[currentProjectKey];
+      const cue = proj.cues[index];
+      if (!cue) return;
 
       document.querySelectorAll('.scene-item').forEach(el => el.classList.remove('active'));
       const activeEl = document.getElementById(`cue-item-${index}`);
@@ -637,18 +745,20 @@
       }
 
       document.getElementById('live-subtitle').innerText = cue.text;
-      document.getElementById('active-cue-label').innerText = `الجزء: ${cue.id} من 31`;
+      document.getElementById('active-cue-label').innerText = `المقطع: ${cue.id} من ${proj.cues.length}`;
       const min = Math.floor(cue.start / 60).toString().padStart(2, '0');
       const sec = (cue.start % 60).toFixed(3).padStart(6, '0');
       document.getElementById('active-cue-time').innerText = `${min}:${sec}`;
     }
 
     function startMillisecondSync() {
+      const proj = PROJECTS[currentProjectKey];
+      const firstCue = proj.cues[0];
       if (ytPlayer) {
-        ytPlayer.seekTo(0.5, true);
+        ytPlayer.seekTo(firstCue.start, true);
         ytPlayer.playVideo();
       }
-      audioElement.currentTime = 0.5;
+      audioElement.currentTime = firstCue.start;
       audioElement.volume = document.getElementById('dub-vol-slider').value / 100;
       audioElement.play().catch(e => console.log(e));
       highlightCue(0);
@@ -666,18 +776,17 @@
 
     // High-Frequency Real-Time Sync Loop (20Hz)
     setInterval(() => {
-      if (ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+      if (ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
         const vidTime = ytPlayer.getCurrentTime();
         const audTime = audioElement.currentTime;
 
-        // Auto re-align if drift exceeds 120ms
         const drift = Math.abs(vidTime - audTime);
         if (drift > 0.12) {
           audioElement.currentTime = vidTime;
         }
 
-        // Find active cue
-        const curIdx = CUES.findIndex(c => vidTime >= c.start && vidTime < c.end + 0.3);
+        const proj = PROJECTS[currentProjectKey];
+        const curIdx = proj.cues.findIndex(c => vidTime >= c.start && vidTime < c.end + 0.3);
         if (curIdx !== -1) {
           highlightCue(curIdx);
         }
