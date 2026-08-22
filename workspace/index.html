@@ -568,11 +568,14 @@
 
     <!-- Project Tabs -->
     <div class="project-tabs">
-      <button class="proj-tab active" id="tab-thefurious" onclick="switchProject('thefurious')">
-        🎬 فيلم The Furious (عامل غلبان يحارب عصابة لوحده)
+      <button class="proj-tab active" id="tab-jimrohn9tips" onclick="switchProject('jimrohn9tips')">
+        🌟 9 نصائح للتواصل (جيم رون - جديد)
+      </button>
+      <button class="proj-tab" id="tab-thefurious" onclick="switchProject('thefurious')">
+        🎬 فيلم The Furious (عامل غلبان)
       </button>
       <button class="proj-tab" id="tab-jimrohn" onclick="switchProject('jimrohn')">
-        🎙️ جيم رون (محاضرة مهارات التواصل الفعال)
+        🎙️ مهارات التواصل الفعال (جيم رون)
       </button>
     </div>
 
@@ -665,6 +668,21 @@
 
   <script>
     const PROJECTS = {
+      jimrohn9tips: {
+        id: 'g9wkTIUkKYk',
+        title: '9 نصائح لتحسين مهارات التواصل (جيم رون)',
+        masterAudio: 'output/jim-rohn-9-tips/jim_rohn_9_tips_dubbed_full.mp3',
+        masterDlName: 'Jim_Rohn_9_Tips_Arabic_Dubbed_Full.mp3',
+        baseAudio: 'output/jim-rohn-9-tips/audio/',
+        scriptPath: 'Jim_Rohn_9_Tips_Dubbing_Script_AR.md',
+        scenes: [
+          { id: 1, name: 'المقطع 1: المقدمة والإنصات بنية الفهم', start: 0, end: 95, audio: 'output/jim-rohn-9-tips/audio/clip_01_listen.mp3', text: 'التواصل الحقيقي لا يعني أن تتحدث أكثر، بل أن يفهمك الآخرون بوضوح. النصيحة الأولى: استمع بقصد الفهم، وليس فقط لانتظار دورك في الكلام.' },
+          { id: 2, name: 'المقطع 2: الوقفات ومخاطبة كل شخص بلغته', start: 95, end: 190, audio: 'output/jim-rohn-9-tips/audio/clip_02_pauses_audience.mp3', text: 'النصيحة الثانية: استخدم الصمت والوقفات بذكاء؛ فالوقفة الواثقة تمنح حديثك وزناً وهيبة. النصيحة الثالثة: خاطب كل شخص باللغة التي يفهمها.' },
+          { id: 3, name: 'المقطع 3: بساطة الكلمات ومطابقة الأفعال', start: 190, end: 285, audio: 'output/jim-rohn-9-tips/audio/clip_03_simplicity_action.mp3', text: 'النصيحة الرابعة: بسّط لغتك وتجنب التعقيد. النصيحة الخامسة: طابق أفعالك مع أقوالك؛ المصداقية هي رأس مال المتحدث والناس يصدقون ما يرونه.' },
+          { id: 4, name: 'المقطع 4: الصدق العاطفي ولغة الجسد', start: 285, end: 380, audio: 'output/jim-rohn-9-tips/audio/clip_04_emotion_bodylang.mp3', text: 'النصيحة السادسة: تحدّث بصدق وشحنة عاطفية متزنة. النصيحة السابعة: أتقن لغة الجسد والتواصل البصري وحركات اليد المتزنة.' },
+          { id: 5, name: 'المقطع 5: الإيجاز والتعلم المستمر', start: 380, end: 478, audio: 'output/jim-rohn-9-tips/audio/clip_05_brevity_learning.mp3', text: 'النصيحة الثامنة: التزم بالإيجاز وقل ما يجب قوله دون إطناب. النصيحة التاسعة: لا تتوقف عن التعلم وتوسيع قاموسك اللغوي، فالتحضير يصنع متحدثاً استثنائياً.' }
+        ]
+      },
       thefurious: {
         id: 'hTEyRhFPu5I',
         title: 'The Furious (عامل غلبان يحارب عصابة كامله)',
@@ -707,7 +725,7 @@
       }
     };
 
-    let currentProjectKey = 'thefurious';
+    let currentProjectKey = 'jimrohn9tips';
     let ytPlayer = null;
     let audioElement = new Audio();
     let currentSceneIndex = 0;
