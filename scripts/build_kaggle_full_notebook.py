@@ -29,7 +29,7 @@ except Exception as exc:
 if shutil.which('ffmpeg') is None:
     subprocess.run(['apt-get', '-o', 'Acquire::Retries=1', '-o', 'Acquire::http::Timeout=15', '-o', 'Acquire::https::Timeout=15', 'update', '-qq'], check=True)
     subprocess.run(['apt-get', '-o', 'Acquire::Retries=1', '-o', 'Acquire::http::Timeout=15', '-o', 'Acquire::https::Timeout=15', 'install', '-y', '-qq', 'ffmpeg'], check=True)
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-U', 'yt-dlp[default]==2026.8.19', 'yt-dlp-ejs', 'pydantic==2.7.4', 'pydantic-settings==2.3.4', 'requests', 'faster-whisper', 'deep-translator', 'soundfile', 'huggingface_hub', 'nest_asyncio'], check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-U', 'yt-dlp', 'pydantic==2.7.4', 'pydantic-settings==2.3.4', 'requests', 'faster-whisper', 'deep-translator', 'soundfile', 'huggingface_hub', 'nest_asyncio'], check=True)
 """
 
 for cell in notebook.get('cells', []):

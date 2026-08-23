@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DBYT — مشغل الدوبلاج فائق المزامنة والدقة (Millisecond Sync)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070a13;
+      --card-bg: rgba(15, 23, 42, 0.9);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --accent: #10b981;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: 60px;
+    }
+
+    .glow-bg {
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(16, 185, 129, 0.12) 40%, transparent 70%);
+      filter: blur(80px);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    header {
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(7, 10, 19, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 1rem 0;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .header-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.35rem;
+      font-weight: 800;
+    }
+
+    .logo-icon {
+      background: linear-gradient(135deg, #3b82f6, #10b981);
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    /* Master Action Banner */
+    .master-action-banner {
+      margin: 1.5rem 0 1rem;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(59, 130, 246, 0.18));
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .banner-text h2 {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #34d399;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .banner-text p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .banner-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .dl-master-btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      text-decoration: none;
+      font-weight: 800;
+      padding: 0.75rem 1.4rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);
+      transition: transform 0.2s, filter 0.2s;
+    }
+
+    .dl-master-btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-2px);
+    }
+
+    .dl-sub-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: white;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 0.75rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      border: 1px solid var(--card-border);
+      transition: background 0.2s;
+    }
+
+    .dl-sub-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Project Tabs */
+    .project-tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin: 1rem 0 1.25rem;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.4rem;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+    }
+
+    .proj-tab {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .proj-tab:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .proj-tab.active {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      box-shadow: 0 4px 18px rgba(37, 99, 235, 0.35);
+    }
+
+    /* Main Grid */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.55fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 992px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Video Player Card */
+    .player-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .video-wrapper {
+      position: relative;
+      padding-top: 56.25%;
+      background: #000;
+    }
+
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .player-controls {
+      padding: 1.25rem;
+    }
+
+    .audio-mix-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1.2rem;
+    }
+
+    .volume-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .vol-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .vol-label span.highlight {
+      color: #60a5fa;
+    }
+
+    input[type=range] {
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
+
+    /* Real-Time Karaoke Subtitles Box */
+    .subtitles-box {
+      margin-top: 1rem;
+      background: rgba(10, 15, 30, 0.95);
+      border: 2px solid #2563eb;
+      padding: 1.25rem;
+      border-radius: 14px;
+      position: relative;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(37, 99, 235, 0.25);
+    }
+
+    .sub-tag {
+      position: absolute;
+      top: -12px;
+      right: 15px;
+      background: #2563eb;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .sub-text {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #60a5fa;
+      line-height: 1.7;
+      text-align: center;
+      transition: color 0.15s ease;
+    }
+
+    .sub-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 0.4rem;
+    }
+
+    /* Scene Navigator Side Panel */
+    .scene-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 1.25rem;
+      height: 720px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sync-indicator {
+      font-size: 0.75rem;
+      color: #34d399;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .scenes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+      flex: 1;
+    }
+
+    .scenes-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .scenes-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+    }
+
+    .scene-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .scene-item:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    .scene-item.active {
+      background: rgba(37, 99, 235, 0.22);
+      border-color: #3b82f6;
+      transform: translateX(-4px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .scene-num {
+      background: rgba(255, 255, 255, 0.08);
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .scene-item.active .scene-num {
+      background: #2563eb;
+      color: white;
+    }
+
+    .scene-content {
+      flex: 1;
+    }
+
+    .scene-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.2rem;
+    }
+
+    .scene-name {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    .scene-time {
+      font-size: 0.72rem;
+      color: #60a5fa;
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    .scene-snippet {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-bg"></div>
+
+  <header>
+    <div class="container header-inner">
+      <div class="logo">
+        <div class="logo-icon">▶</div>
+        <span>DBYT الدوبلاج الاحترافي فائق المزامنة</span>
+        <span class="badge">دقة التوقيت بالمللي ثانية</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Master Action Banner -->
+    <div class="master-action-banner">
+      <div class="banner-text">
+        <h2 id="banner-title">⚡ نظام المزامنة الحية فائقة الدقة (Millisecond Lip-Sync)</h2>
+        <p id="banner-desc">دبلجة متزامنة بدقة الإطار الزمني بالمللي ثانية لخطاب ديفيد جوجينز الأسطوري (David Goggins).</p>
+      </div>
+      <div class="banner-actions">
+        <button class="dl-master-btn" onclick="startMillisecondSync()">
+          ▶ تشغيل متزامن الآن بالصوت العربي
+        </button>
+        <a id="srt-download-btn" class="dl-sub-btn" href="David_Goggins_VFW_Award_Arabic.srt" download="David_Goggins_VFW_Award_Arabic.srt">
+          📄 تحميل ملف SRT
+        </a>
+      </div>
+    </div>
+
+    <!-- Project Tabs -->
+    <div class="project-tabs">
+      <button class="proj-tab active" id="tab-goggins" onclick="switchProject('goggins')">
+        🔥 ديفيد جوجينز (خطاب الشجاعة والإصرار - جديد)
+      </button>
+      <button class="proj-tab" id="tab-jimrohn9tips" onclick="switchProject('jimrohn9tips')">
+        🌟 9 نصائح للتواصل (جيم رون)
+      </button>
+      <button class="proj-tab" id="tab-thefurious" onclick="switchProject('thefurious')">
+        🎬 فيلم The Furious
+      </button>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+      <!-- Player Area -->
+      <div class="player-card">
+        <div class="video-wrapper">
+          <div id="youtube-player"></div>
+        </div>
+
+        <div class="player-controls">
+          <!-- Audio Mix Controls -->
+          <div class="audio-mix-bar">
+            <div class="volume-group">
+              <div class="vol-label">
+                <span>🔊 صوت الدوبلاج العربي الموزون</span>
+                <span class="highlight" id="dub-vol-val">100%</span>
+              </div>
+              <input type="range" id="dub-vol-slider" min="0" max="100" value="100" oninput="updateDubVolume(this.value)">
+            </div>
+            <div class="volume-group">
+              <div class="vol-label">
+                <span>🎵 صوت الفيديو الأصلي والموسيقى</span>
+                <span class="highlight" id="vid-vol-val">20%</span>
+              </div>
+              <input type="range" id="vid-vol-slider" min="0" max="100" value="20" oninput="updateVidVolume(this.value)">
+            </div>
+          </div>
+
+          <!-- Real-Time Karaoke Subtitles Box -->
+          <div class="subtitles-box">
+            <span class="sub-tag">🎙️ الكلام المنطوق حالياً في اللحظة الزمنية</span>
+            <div class="sub-text" id="live-subtitle">اضغط على زر التشغيل المتزامن أعلاه لبدء مطابقة الصوت والكلمات فوراً...</div>
+            <div class="sub-meta">
+              <span id="active-cue-label">الجزء: —</span>
+              <span id="active-drift-stat" style="color: #34d399; font-family: monospace;">معدل التطابق: متزامن 100%</span>
+              <span id="active-cue-time" style="font-family: monospace; font-weight: 700; color: #60a5fa;">00:00.000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scenes List Area -->
+      <div class="scene-card">
+        <div class="card-title">
+          <span>📑 مصفوفة الجمل والتوقيتات بالثواني</span>
+          <div class="sync-indicator">
+            <span class="sync-dot"></span>
+            <span id="cues-count">10 مقاطع</span>
+          </div>
+        </div>
+        <div class="scenes-list" id="scenes-container">
+          <!-- Populated from cues -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+
+  <script>
+    const PROJECTS = {
+      goggins: {
+        id: 'mJMwKQSovjo',
+        title: 'ديفيد جوجينز (خطاب الشجاعة والإصرار)',
+        desc: 'دبلجة متزامنة بدقة الإطار الزمني بالمللي ثانية لخطاب ديفيد جوجينز الأسطوري (David Goggins).',
+        masterAudio: 'David_Goggins_Arabic_Dubbed_TimeAligned.mp3',
+        srtPath: 'David_Goggins_VFW_Award_Arabic.srt',
+        cues: [
+          { "id": 1, "start": 0.5, "end": 35.0, "text": "يُعرف ضابط الصف المتقاعد ديفيد جوجينز بصلابته البدنية والذهنية الفائقة، وبعزيمة تكاد تكون خارقة للمألوف." },
+          { "id": 2, "start": 35.0, "end": 160.0, "text": "[مراسم تسليم الجائزة وتلاوة وثيقة التكريم الرسمية وتصفيق الحضور]" },
+          { "id": 3, "start": 160.0, "end": 215.0, "text": "ديفيد جوجينز: أقف بينكم اليوم بكل تواضع.. أشكر جدي الراحل، وأشكر أمي التي علمتني كيف أنهض بنفسي حين أسقط." },
+          { "id": 4, "start": 215.0, "end": 240.0, "text": "[تأثر ديفيد وتصفيق حار من القاعة تقديراً للأم]" },
+          { "id": 5, "start": 240.0, "end": 290.0, "text": "لم أكن يوماً هذا الرجل القوي.. كنت مكسوراً، أزن 300 باوند وأرش الصراصير، وروحي تصرخ: أريد أن أكون استثنائياً!" },
+          { "id": 6, "start": 290.0, "end": 345.0, "text": "طلبوا مني خسارة 160 باوند في 3 أشهر.. حاربت جسدي وعقلي وعدت إليهم بعد 3 أشهر خاسراً 160 باونداً كاملة!" },
+          { "id": 7, "start": 345.0, "end": 360.0, "text": "[تصفيق وتشجيع مدوٍ من الحضور لإنجاز إنقاص الوزن الأسطوري]" },
+          { "id": 8, "start": 360.0, "end": 420.0, "text": "خضت أسبوع الجحيم 3 مرات إلى جانب مايكل ميرفي؛ أنا لست بطلاً بل نلت شرف الخدمة بجانب أبطال حقيقيين." },
+          { "id": 9, "start": 430.0, "end": 478.0, "text": "الشجاعة الحقيقية هي أن تشد حذاءك العسكري كل فجر وتخرج لتضحي من أجل رفيقك الذي يقف بجانبك في خط النار!" },
+          { "id": 10, "start": 478.0, "end": 522.0, "text": "[تصفيق حار ووقوف تكريمي من الحضور لنهاية الخطاب]" }
+        ]
+      },
+      jimrohn9tips: {
+        id: 'g9wkTIUkKYk',
+        title: 'جيم رون (9 نصائح لتحسين مهارات التواصل)',
+        desc: 'دبلجة متزامنة بالمللي ثانية لخطاب جيم رون حول مهارات التواصل الفعال.',
+        masterAudio: 'Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3',
+        srtPath: 'Jim_Rohn_9_Tips_Arabic.srt',
+        cues: [
+          { "id": 1, "start": 0.5, "end": 4.2, "text": "التواصل الفعّال لا يعني أن تقول كلاماً أكثر، بل أن تكون مفهوماً بوضوح." },
+          { "id": 2, "start": 4.8, "end": 9.5, "text": "مرحباً بكم. اليوم سنستعرض تسع نصائح ذهبية لتطوير مهارات التواصل والتأثير." },
+          { "id": 3, "start": 10.2, "end": 15.0, "text": "النصيحة الأولى: استمع بنيّة الفهم، وليس بنية الرد فقط." },
+          { "id": 4, "start": 15.6, "end": 20.5, "text": "أغلب الناس لا يستمعون لاستيعاب ما يُقال، بل يجهزون إجاباتهم أثناء حديث الطرف الآخر." },
+          { "id": 5, "start": 21.1, "end": 26.0, "text": "حين تمنح الشخص المقابل كامل انتباهك، فإنك تبني جسراً من الثقة والاحترام المتبادل." },
+          { "id": 6, "start": 27.0, "end": 31.5, "text": "النصيحة الثانية: استخدم قوة الوقفات والصمت المحسوب." },
+          { "id": 7, "start": 32.0, "end": 37.2, "text": "الصمت القصير قبل الإجابة يعكس حكمة وهيبة، ويمنح كلماتك وزناً وقيمة أكبر." },
+          { "id": 8, "start": 37.8, "end": 43.0, "text": "التوقف للحظات يسمح للمستمع باستيعاب المعنى، ويحميك من التسرع في التعبير." },
+          { "id": 9, "start": 44.0, "end": 48.5, "text": "النصيحة الثالثة: لائم رسالتك مع عقلية من تخاطبه." },
+          { "id": 10, "start": 49.0, "end": 54.2, "text": "المتحدث البارع لا يستخدم أسلوباً واحداً مع الجميع؛ بل يكيّف كلامه بحسب الشخص المقابل." }
+        ]
+      },
+      thefurious: {
+        id: 'hTEyRhFPu5I',
+        title: 'The Furious (عامل غلبان يحارب عصابة كامله)',
+        desc: 'دبلجة فيلم الأكشن The Furious محاذاة كلمة بكلمة مع المشاهد.',
+        masterAudio: 'The_Furious_Arabic_Dubbed_Full.mp3',
+        srtPath: 'The_Furious_Dubbing_Script_AR.md',
+        cues: [
+          { "id": 1, "start": 0, "end": 105, "text": "يبدأ المشهد مع الصحفية ماتيا وهي ترسل تسجيلاً سرياً لزوجها نافين، تخبره بأنها عثرت أخيراً على موقع الشاحنة." },
+          { "id": 2, "start": 105, "end": 200, "text": "في حي هادئ، نتعرف على وانغ، العامل الصامت الذي يحاول العيش بسلام برفقة ابنته الصغيرة ريني." },
+          { "id": 3, "start": 200, "end": 315, "text": "تخرج ريني إلى الشارع لتفاجأ بظهور أفراد العصابة حيث يأخذونها داخل شاحنة كبيرة بسرعة مباغتة." },
+          { "id": 4, "start": 315, "end": 420, "text": "يصل وانغ مسرعاً إلى قسم الشرطة ويكتب بيأس على الورق لإنقاذ ابنته، لكن قائد الشرطة الفاسد يأمر بطرده." }
+        ]
+      }
+    };
+
+    let currentProjectKey = 'goggins';
+    let ytPlayer = null;
+    let audioElement = new Audio();
+    let activeCueIndex = -1;
+
+    function onYouTubeIframeAPIReady() {
+      loadProject(currentProjectKey);
+    }
+
+    function loadProject(key) {
+      currentProjectKey = key;
+      const proj = PROJECTS[key];
+      activeCueIndex = -1;
+
+      // Update UI Banner
+      document.getElementById('banner-title').innerText = `⚡ نظام المزامنة الحية (${proj.title})`;
+      document.getElementById('banner-desc').innerText = proj.desc;
+      const srtBtn = document.getElementById('srt-download-btn');
+      srtBtn.href = proj.srtPath;
+      srtBtn.download = proj.srtPath;
+
+      // Update Tabs
+      document.querySelectorAll('.proj-tab').forEach(t => t.classList.remove('active'));
+      const activeTab = document.getElementById(`tab-${key}`);
+      if (activeTab) activeTab.classList.add('active');
+
+      // Update Audio
+      audioElement.pause();
+      audioElement.src = proj.masterAudio;
+
+      // Render Cues
+      renderCuesList(proj);
+
+      // Load Video
+      if (ytPlayer && ytPlayer.loadVideoById) {
+        ytPlayer.loadVideoById(proj.id);
+        ytPlayer.setVolume(20);
+      } else if (typeof YT !== 'undefined' && YT.Player) {
+        ytPlayer = new YT.Player('youtube-player', {
+          videoId: proj.id,
+          playerVars: { playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
+          events: {
+            'onReady': (e) => e.target.setVolume(20),
+            'onStateChange': onPlayerStateChange
+          }
+        });
+      }
+    }
+
+    function onPlayerStateChange(e) {
+      if (e.data === YT.PlayerState.PAUSED) {
+        audioElement.pause();
+      } else if (e.data === YT.PlayerState.PLAYING) {
+        audioElement.currentTime = ytPlayer.getCurrentTime();
+        audioElement.play().catch(err => console.log(err));
+      }
+    }
+
+    function switchProject(key) {
+      if (key === currentProjectKey) return;
+      loadProject(key);
+    }
+
+    function renderCuesList(proj) {
+      const container = document.getElementById('scenes-container');
+      container.innerHTML = '';
+      document.getElementById('cues-count').innerText = `${proj.cues.length} مقاطع`;
+
+      proj.cues.forEach((c, idx) => {
+        const item = document.createElement('div');
+        item.className = 'scene-item';
+        item.id = `cue-item-${idx}`;
+        item.onclick = () => jumpToCue(idx);
+
+        const startM = Math.floor(c.start / 60).toString().padStart(2, '0');
+        const startS = (c.start % 60).toFixed(1).padStart(4, '0');
+
+        item.innerHTML = `
+          <div class="scene-num">${c.id}</div>
+          <div class="scene-content">
+            <div class="scene-header">
+              <span class="scene-name">المقطع ${c.id}</span>
+              <span class="scene-time">${startM}:${startS}</span>
+            </div>
+            <div class="scene-snippet">${c.text}</div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function jumpToCue(index) {
+      const proj = PROJECTS[currentProjectKey];
+      const cue = proj.cues[index];
+      if (ytPlayer && ytPlayer.seekTo) {
+        ytPlayer.seekTo(cue.start, true);
+        ytPlayer.playVideo();
+      }
+      audioElement.currentTime = cue.start;
+      audioElement.play().catch(e => console.log(e));
+      highlightCue(index);
+    }
+
+    function highlightCue(index) {
+      if (activeCueIndex === index) return;
+      activeCueIndex = index;
+      const proj = PROJECTS[currentProjectKey];
+      const cue = proj.cues[index];
+      if (!cue) return;
+
+      document.querySelectorAll('.scene-item').forEach(el => el.classList.remove('active'));
+      const activeEl = document.getElementById(`cue-item-${index}`);
+      if (activeEl) {
+        activeEl.classList.add('active');
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      document.getElementById('live-subtitle').innerText = cue.text;
+      document.getElementById('active-cue-label').innerText = `المقطع: ${cue.id} من ${proj.cues.length}`;
+      const min = Math.floor(cue.start / 60).toString().padStart(2, '0');
+      const sec = (cue.start % 60).toFixed(3).padStart(6, '0');
+      document.getElementById('active-cue-time').innerText = `${min}:${sec}`;
+    }
+
+    function startMillisecondSync() {
+      const proj = PROJECTS[currentProjectKey];
+      const firstCue = proj.cues[0];
+      if (ytPlayer) {
+        ytPlayer.seekTo(firstCue.start, true);
+        ytPlayer.playVideo();
+      }
+      audioElement.currentTime = firstCue.start;
+      audioElement.volume = document.getElementById('dub-vol-slider').value / 100;
+      audioElement.play().catch(e => console.log(e));
+      highlightCue(0);
+    }
+
+    function updateDubVolume(val) {
+      document.getElementById('dub-vol-val').innerText = `${val}%`;
+      audioElement.volume = val / 100;
+    }
+
+    function updateVidVolume(val) {
+      document.getElementById('vid-vol-val').innerText = `${val}%`;
+      if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(val);
+    }
+
+    // High-Frequency Real-Time Sync Loop (20Hz)
+    setInterval(() => {
+      if (ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+        const vidTime = ytPlayer.getCurrentTime();
+        const audTime = audioElement.currentTime;
+
+        const drift = Math.abs(vidTime - audTime);
+        if (drift > 0.12) {
+          audioElement.currentTime = vidTime;
+        }
+
+        const proj = PROJECTS[currentProjectKey];
+        const curIdx = proj.cues.findIndex(c => vidTime >= c.start && vidTime < c.end + 0.3);
+        if (curIdx !== -1) {
+          highlightCue(curIdx);
+        }
+      }
+    }, 50);
+  </script>
+</body>
+</html>

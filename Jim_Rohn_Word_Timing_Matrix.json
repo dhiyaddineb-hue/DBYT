@@ -1,0 +1,81 @@
+{
+  "video_id": "g9wkTIUkKYk",
+  "title": "9 Tips to Improve Your Communication Skills | Jim Rohn Motivation",
+  "total_duration": "07:58",
+  "master_audio": "Jim_Rohn_9_Tips_Arabic_Dubbed_TimeAligned.mp3",
+  "granularity": "word_and_cue",
+  "tips": [
+    {
+      "tip_number": 1,
+      "name": "الاستماع بقصد الفهم",
+      "start_sec": 10.0,
+      "end_sec": 35.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_01_listen.mp3",
+      "text": "النصيحة الأولى: استمع بقصد الفهم، وليس فقط لانتظار دورك في الكلام. عندما تستمع بإنصات كامل، يشعر الطرف الآخر بالاحترام والتقدير، مما يفتح قلبه وعقله لكلماتك."
+    },
+    {
+      "tip_number": 2,
+      "name": "قوة الوقفات والصمت المحسوب",
+      "start_sec": 55.0,
+      "end_sec": 85.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_02_pauses.mp3",
+      "text": "النصيحة الثانية: استخدم الصمت والوقفات بذكاء؛ فالوقفة الواثقة تمنح حديثك وزناً وهيبة، وتتيح للمستمع استيعاب فكرتك بدقة."
+    },
+    {
+      "tip_number": 3,
+      "name": "ملاءمة الخطاب للجمهور",
+      "start_sec": 105.0,
+      "end_sec": 135.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_03_audience.mp3",
+      "text": "النصيحة الثالثة: خاطب كل شخص باللغة التي يفهمها؛ حدد رسالتك لتناسب عقلية واحتياجات جمهورك، فالقائد الماهر يكيّف أسلوبه ببراعة."
+    },
+    {
+      "tip_number": 4,
+      "name": "بساطة الكلمات واللغة",
+      "start_sec": 155.0,
+      "end_sec": 185.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_04_simplicity.mp3",
+      "text": "النصيحة الرابعة: بسّط لغتك وتجنب التعقيد؛ أعظم الأفكار هي تلك التي تُقال بكلمات واضحة ومباشرة تصل إلى الهدف."
+    },
+    {
+      "tip_number": 5,
+      "name": "مطابقة الأفعال للأقوال",
+      "start_sec": 210.0,
+      "end_sec": 240.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_05_action.mp3",
+      "text": "النصيحة الخامسة: طابق أفعالك مع أقوالك؛ المصداقية هي رأس مال المتحدث، والناس يصدقون ما يرونه من سلوكك قبل ما يسمعونه."
+    },
+    {
+      "tip_number": 6,
+      "name": "الصدق والعاطفة المتزنة",
+      "start_sec": 265.0,
+      "end_sec": 295.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_06_conviction.mp3",
+      "text": "النصيحة السادسة: تحدّث بصدق وشحنة عاطفية متزنة؛ فالكلمات الصادقة النابعة من القلب تخترق القلوب وتبني جسور التأثير."
+    },
+    {
+      "tip_number": 7,
+      "name": "لغة الجسد والتواصل البصري",
+      "start_sec": 320.0,
+      "end_sec": 350.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_07_bodylanguage.mp3",
+      "text": "النصيحة السابعة: أتقن لغة الجسد والتواصل البصري؛ فنظرة العين الواثقة وحركات اليد المتزنة تعزز رسالتك وتمنحك حضوراً آسراً."
+    },
+    {
+      "tip_number": 8,
+      "name": "الإيجاز وتجنب الإطناب",
+      "start_sec": 375.0,
+      "end_sec": 405.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_08_brevity.mp3",
+      "text": "النصيحة الثامنة: التزم بالإيجاز؛ قل ما يجب قوله بتركيز دون إطناب أو ثرثرة زائدة، ودع مساحة للطرف الآخر للتفاعل."
+    },
+    {
+      "tip_number": 9,
+      "name": "التعلم المستمر والتحضير الدائم",
+      "start_sec": 430.0,
+      "end_sec": 478.0,
+      "audio_file": "workspace/output/jim-rohn-9-tips/audio/tip_09_continuous_learning.mp3",
+      "text": "النصيحة التاسعة: لا تتوقف عن التعلم وتوسيع قاموسك اللغوي، فالتحضير المستمر يصنع متحدثاً استثنائياً يغير حياة من حوله."
+    }
+  ]
+}
