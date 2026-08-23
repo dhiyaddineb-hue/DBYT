@@ -37,20 +37,18 @@ def _run(command: list[str], *, log: Path | None = None, check: bool = True,
 def _install_tools() -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-        _run(["bash", "-lc", "apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg"])
+        _run(["bash", "-lc", "apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg"], check=False)
     _run([
-        sys.executable, "-m", "pip", "install", "-q", "--upgrade",
-        "yt-dlp[default]==2026.8.19", "yt-dlp-ejs",
-    ])
+        sys.executable, "-m", "pip", "install", "-q", "--upgrade", "--break-system-packages",
+        "yt-dlp",
+    ], check=False)
     deno_root = ROOT / ".deno"
     deno_path = deno_root / "bin" / "deno"
     deno_root.mkdir(parents=True, exist_ok=True)
     if not deno_path.is_file():
         env = os.environ.copy()
         env.update({"DENO_INSTALL": str(deno_root), "DENO_DIR": str(ROOT / "deno-cache"), "CI": "1"})
-        _run(["bash", "-lc", "curl -fsSL https://deno.land/install.sh | sh"], check=True, env=env)
-    if not deno_path.is_file():
-        raise RuntimeError(f"Deno installation failed: {deno_path}")
+        _run(["bash", "-lc", "curl -fsSL https://deno.land/install.sh | sh"], check=False, env=env)
     return deno_path
 
 

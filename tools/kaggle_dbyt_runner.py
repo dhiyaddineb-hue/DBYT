@@ -78,7 +78,7 @@ def _install_runtime() -> None:
     if shutil.which("ffmpeg") is None:
         _run(["bash", "-lc", "apt-get update -qq && apt-get install -y -qq ffmpeg"])
     packages = [
-        "yt-dlp[default]==2026.8.19",
+        "yt-dlp",
         "yt-dlp-ejs",
         "pydantic==2.7.4",
         "pydantic-settings==2.3.4",
